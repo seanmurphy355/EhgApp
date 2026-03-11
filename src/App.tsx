@@ -14,10 +14,27 @@ import {
   Text,
   Textarea,
 } from "@chakra-ui/react";
-import { PanelLeftClose, PanelLeftOpen } from "lucide-react";
+import {
+  Activity as ActivityIcon,
+  FileText,
+  FolderGit2,
+  Home as HomeIcon,
+  ListTodo,
+  PanelLeftClose,
+  PanelLeftOpen,
+  Settings as SettingsIcon,
+} from "lucide-react";
 import { AsciiArtAnimation } from "./components/AsciiArtAnimation";
+import { Tooltip } from "./components/ui/tooltip";
 
-const workspaceSections = ["Home", "Tasks", "Activity", "Repos", "Prompts", "Settings"];
+const workspaceSections = [
+  { label: "Home", icon: HomeIcon },
+  { label: "Tasks", icon: ListTodo },
+  { label: "Activity", icon: ActivityIcon },
+  { label: "Repos", icon: FolderGit2 },
+  { label: "Prompts", icon: FileText },
+  { label: "Settings", icon: SettingsIcon },
+] as const;
 
 const activityFeed = [
   {
@@ -76,6 +93,30 @@ const secondaryButtonStyles = {
   },
 } as const;
 
+const sidebarIconButtonStyles = {
+  variant: "ghost",
+  bg: "transparent",
+  color: "ui.textSubtle",
+  border: "1px solid",
+  borderColor: "transparent",
+  borderRadius: "control",
+  transition: "background-color 0.2s ease, border-color 0.2s ease, color 0.2s ease",
+  _hover: {
+    bg: "ui.surfaceHover",
+    borderColor: "ui.borderStrong",
+    color: "ui.text",
+  },
+  _focusVisible: {
+    borderColor: "ui.focus",
+    boxShadow: "0 0 0 1px var(--chakra-colors-ui-focus)",
+  },
+  _active: {
+    bg: "ui.surfaceInset",
+    borderColor: "ui.borderStrong",
+    color: "ui.text",
+  },
+} as const;
+
 export default function App() {
   const [activeSection, setActiveSection] = useState("Home");
   const [repoName, setRepoName] = useState("ehg/agent-research-lab");
@@ -94,16 +135,13 @@ export default function App() {
         position="relative"
         zIndex="1"
         minH="100vh"
-        templateColumns={{ base: "1fr", lg: sidebarOpen ? "272px minmax(0, 1fr)" : "56px minmax(0, 1fr)" }}
+        templateColumns={{ base: "1fr", lg: sidebarOpen ? "272px minmax(0, 1fr)" : "72px minmax(0, 1fr)" }}
         css={{ transition: "grid-template-columns 0.2s ease" }}
       >
         <Box
           as="aside"
           bg="ui.panelAlpha"
           backdropFilter="blur(18px)"
-          borderBottom={{ base: "1px solid", lg: "none" }}
-          borderRight={{ base: "none", lg: "1px solid" }}
-          borderColor="ui.border"
           position={{ base: "relative", lg: "sticky" }}
           top="0"
           h={{ lg: "100vh" }}
@@ -112,14 +150,21 @@ export default function App() {
           <Flex
             direction="column"
             minH={{ lg: "100vh" }}
-            px={{ base: "4", md: sidebarOpen ? "5" : "2" }}
+            px={{ base: "4", md: "5", lg: sidebarOpen ? "5" : "3" }}
             py={{ base: "4", md: "6" }}
-            gap="6"
+            gap={{ base: "6", lg: sidebarOpen ? "6" : "5" }}
+            align={{ base: "stretch", lg: sidebarOpen ? "stretch" : "center" }}
             css={{ transition: "padding 0.2s ease" }}
           >
-            <Stack gap="5">
-              <Flex align="center" justify="space-between">
-                <HStack gap="3" align="center" minW="0">
+            <Stack gap="5" w="full" align={{ base: "stretch", lg: sidebarOpen ? "stretch" : "center" }}>
+              <Flex
+                direction={{ base: "row", lg: sidebarOpen ? "row" : "column" }}
+                align="center"
+                justify={{ base: "space-between", lg: sidebarOpen ? "space-between" : "center" }}
+                gap={{ base: "3", lg: sidebarOpen ? "3" : "4" }}
+                w="full"
+              >
+                <HStack gap="3" align="center" minW="0" justify={{ base: "flex-start", lg: sidebarOpen ? "flex-start" : "center" }}>
                   <Flex
                     h="10"
                     w="10"
@@ -137,95 +182,114 @@ export default function App() {
                   >
                     J
                   </Flex>
-                  {sidebarOpen && (
-                    <Stack gap="0" minW="0">
-                      <Text fontSize="sm" fontWeight="600" color="ui.text" truncate>
-                        Jules-style Lab
-                      </Text>
-                      <Text fontSize="xs" color="ui.textMuted" truncate>
-                        Agent workspace shell
-                      </Text>
-                    </Stack>
-                  )}
+                  <Stack gap="0" minW="0" display={{ base: "flex", lg: sidebarOpen ? "flex" : "none" }}>
+                    <Text fontSize="sm" fontWeight="600" color="ui.text" truncate>
+                      Jules-style Lab
+                    </Text>
+                    <Text fontSize="xs" color="ui.textMuted" truncate>
+                      Agent workspace shell
+                    </Text>
+                  </Stack>
                 </HStack>
-                <IconButton
-                  aria-label={sidebarOpen ? "Collapse sidebar" : "Expand sidebar"}
-                  variant="ghost"
-                  size="sm"
-                  color="ui.textSubtle"
-                  _hover={{ color: "ui.text", bg: "ui.surfaceHover" }}
-                  onClick={() => setSidebarOpen((prev) => !prev)}
-                  flexShrink="0"
-                >
-                  {sidebarOpen ? <PanelLeftClose size={16} /> : <PanelLeftOpen size={16} />}
-                </IconButton>
+
+                <Tooltip content={sidebarOpen ? "Collapse sidebar" : "Expand sidebar"}>
+                  <IconButton
+                    aria-label={sidebarOpen ? "Collapse sidebar" : "Expand sidebar"}
+                    display={{ base: "none", lg: "inline-flex" }}
+                    size="sm"
+                    h="10"
+                    w="10"
+                    minW="10"
+                    onClick={() => setSidebarOpen((prev) => !prev)}
+                    flexShrink="0"
+                    {...sidebarIconButtonStyles}
+                  >
+                    {sidebarOpen ? <PanelLeftClose size={16} /> : <PanelLeftOpen size={16} />}
+                  </IconButton>
+                </Tooltip>
               </Flex>
 
-              {sidebarOpen && (
-                <>
-                  <Button
-                    bg="ui.accent"
-                    color="white"
-                    borderRadius="control"
-                    h="11"
-                    _hover={{ bg: "ui.accentHover" }}
-                  >
-                    New task
-                  </Button>
+              <Stack gap="5" w="full" display={{ base: "flex", lg: sidebarOpen ? "flex" : "none" }}>
+                <Button bg="ui.accent" color="white" borderRadius="control" h="11" _hover={{ bg: "ui.accentHover" }}>
+                  New task
+                </Button>
 
-                  <Stack gap="3">
-                    <Text fontSize="xs" textTransform="uppercase" letterSpacing="0.18em" color="ui.textSubtle" fontFamily="mono">
-                      Workspace
-                    </Text>
-                    <Grid templateColumns={{ base: "repeat(2, minmax(0, 1fr))", sm: "repeat(3, minmax(0, 1fr))", lg: "1fr" }} gap="2">
-                      {workspaceSections.map((section) => {
-                        const active = activeSection === section;
-
-                        return (
-                          <Button
-                            key={section}
-                            justifyContent="flex-start"
-                            h="10"
-                            px="3"
-                            variant="ghost"
-                            bg={active ? "ui.surfaceHover" : "transparent"}
-                            color={active ? "ui.text" : "ui.textMuted"}
-                            border="1px solid"
-                            borderColor={active ? "ui.borderStrong" : "transparent"}
-                            borderLeft="2px solid"
-                            borderLeftColor={active ? "ui.accent" : "transparent"}
-                            borderRadius="control"
-                            _hover={{ bg: "ui.surfaceHover", color: "ui.text", borderColor: "ui.borderStrong" }}
-                            onClick={() => setActiveSection(section)}
-                          >
-                            <Text>{section}</Text>
-                          </Button>
-                        );
-                      })}
-                    </Grid>
-                  </Stack>
-                </>
-              )}
-            </Stack>
-
-            {sidebarOpen && (
-              <Box bg="ui.cardAltAlpha" border="1px solid" borderColor="ui.border" borderRadius="panel" px="4" py="4">
-                <Stack gap="2">
+                <Stack gap="3">
                   <Text fontSize="xs" textTransform="uppercase" letterSpacing="0.18em" color="ui.textSubtle" fontFamily="mono">
-                    Active repo
+                    Workspace
                   </Text>
-                  <Text fontSize="sm" fontWeight="600" color="ui.text">
-                    {repoName}
-                  </Text>
-                  <HStack align="start" gap="2">
-                    <Box h="2" w="2" mt="1.5" borderRadius="full" bg="ui.success" flexShrink="0" />
-                    <Text fontSize="sm" color="ui.textMuted" lineHeight="1.6">
-                      Connected and ready for a scoped task prompt.
-                    </Text>
-                  </HStack>
+                  <Grid templateColumns={{ base: "repeat(2, minmax(0, 1fr))", sm: "repeat(3, minmax(0, 1fr))", lg: "1fr" }} gap="2">
+                    {workspaceSections.map((section) => {
+                      const active = activeSection === section.label;
+                      const SectionIcon = section.icon;
+
+                      return (
+                        <Button
+                          key={section.label}
+                          justifyContent="flex-start"
+                          gap="3"
+                          h="10"
+                          px="3"
+                          variant="ghost"
+                          bg={active ? "ui.surfaceHover" : "transparent"}
+                          color={active ? "ui.text" : "ui.textMuted"}
+                          border="1px solid"
+                          borderColor={active ? "ui.borderStrong" : "transparent"}
+                          borderLeft="2px solid"
+                          borderLeftColor={active ? "ui.accent" : "transparent"}
+                          borderRadius="control"
+                          _hover={{ bg: "ui.surfaceHover", color: "ui.text", borderColor: "ui.borderStrong" }}
+                          onClick={() => setActiveSection(section.label)}
+                          aria-current={active ? "page" : undefined}
+                        >
+                          <SectionIcon size={16} />
+                          <Text>{section.label}</Text>
+                        </Button>
+                      );
+                    })}
+                  </Grid>
                 </Stack>
-              </Box>
-            )}
+              </Stack>
+
+              <Stack gap="2" align="center" w="full" display={{ base: "none", lg: sidebarOpen ? "none" : "flex" }}>
+                {workspaceSections.map((section) => {
+                  const active = activeSection === section.label;
+                  const SectionIcon = section.icon;
+
+                  return (
+                    <Tooltip key={section.label} content={section.label}>
+                      <IconButton
+                        aria-label={section.label}
+                        size="sm"
+                        h="10"
+                        w="10"
+                        minW="10"
+                        position="relative"
+                        onClick={() => setActiveSection(section.label)}
+                        aria-current={active ? "page" : undefined}
+                        {...sidebarIconButtonStyles}
+                        bg={active ? "ui.accentMuted" : sidebarIconButtonStyles.bg}
+                        color={active ? "ui.text" : sidebarIconButtonStyles.color}
+                        borderColor={active ? "ui.accentBorder" : sidebarIconButtonStyles.borderColor}
+                        boxShadow={active ? "inset 0 0 0 1px var(--chakra-colors-ui-accent-border)" : undefined}
+                        _before={{
+                          content: '""',
+                          position: "absolute",
+                          left: "3px",
+                          top: "8px",
+                          bottom: "8px",
+                          width: "2px",
+                          borderRadius: "full",
+                          bg: active ? "ui.accent" : "transparent",
+                        }}
+                      >
+                        <SectionIcon size={18} />
+                      </IconButton>
+                    </Tooltip>
+                  );
+                })}
+              </Stack>
+            </Stack>
           </Flex>
         </Box>
 
@@ -544,3 +608,4 @@ export default function App() {
     </Box>
   );
 }
+
