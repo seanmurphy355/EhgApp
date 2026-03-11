@@ -107,95 +107,125 @@ export default function App() {
           position={{ base: "relative", lg: "sticky" }}
           top="0"
           h={{ lg: "100vh" }}
+          overflow="hidden"
         >
-          <Flex direction="column" minH={{ lg: "100vh" }} px={{ base: "4", md: "5" }} py={{ base: "4", md: "6" }} gap="6">
-            <Stack gap="5" flex="1">
-              <HStack gap="3" align="center">
-                <Flex
-                  h="10"
-                  w="10"
-                  align="center"
-                  justify="center"
-                  borderRadius="16px"
-                  bg="ui.surfaceInset"
-                  border="1px solid"
-                  borderColor="ui.border"
-                  color="ui.accentSoft"
-                  fontWeight="700"
-                  fontSize="sm"
-                  letterSpacing="-0.03em"
+          <Flex
+            direction="column"
+            minH={{ lg: "100vh" }}
+            px={{ base: "4", md: sidebarOpen ? "5" : "2" }}
+            py={{ base: "4", md: "6" }}
+            gap="6"
+            css={{ transition: "padding 0.2s ease" }}
+          >
+            <Stack gap="5">
+              <Flex align="center" justify="space-between">
+                <HStack gap="3" align="center" minW="0">
+                  <Flex
+                    h="10"
+                    w="10"
+                    align="center"
+                    justify="center"
+                    borderRadius="16px"
+                    bg="ui.surfaceInset"
+                    border="1px solid"
+                    borderColor="ui.border"
+                    color="ui.accentSoft"
+                    fontWeight="700"
+                    fontSize="sm"
+                    letterSpacing="-0.03em"
+                    flexShrink="0"
+                  >
+                    J
+                  </Flex>
+                  {sidebarOpen && (
+                    <Stack gap="0" minW="0">
+                      <Text fontSize="sm" fontWeight="600" color="ui.text" truncate>
+                        Jules-style Lab
+                      </Text>
+                      <Text fontSize="xs" color="ui.textMuted" truncate>
+                        Agent workspace shell
+                      </Text>
+                    </Stack>
+                  )}
+                </HStack>
+                <IconButton
+                  aria-label={sidebarOpen ? "Collapse sidebar" : "Expand sidebar"}
+                  variant="ghost"
+                  size="sm"
+                  color="ui.textSubtle"
+                  _hover={{ color: "ui.text", bg: "ui.surfaceHover" }}
+                  onClick={() => setSidebarOpen((prev) => !prev)}
+                  flexShrink="0"
                 >
-                  J
-                </Flex>
-                <Stack gap="0" minW="0">
-                  <Text fontSize="sm" fontWeight="600" color="ui.text">
-                    Jules-style Lab
-                  </Text>
-                  <Text fontSize="xs" color="ui.textMuted">
-                    Agent workspace shell
-                  </Text>
-                </Stack>
-              </HStack>
+                  {sidebarOpen ? <PanelLeftClose size={16} /> : <PanelLeftOpen size={16} />}
+                </IconButton>
+              </Flex>
 
-              <Button
-                bg="ui.accent"
-                color="white"
-                borderRadius="control"
-                h="11"
-                _hover={{ bg: "ui.accentHover" }}
-              >
-                New task
-              </Button>
+              {sidebarOpen && (
+                <>
+                  <Button
+                    bg="ui.accent"
+                    color="white"
+                    borderRadius="control"
+                    h="11"
+                    _hover={{ bg: "ui.accentHover" }}
+                  >
+                    New task
+                  </Button>
 
-              <Stack gap="3">
-                <Text fontSize="xs" textTransform="uppercase" letterSpacing="0.18em" color="ui.textSubtle" fontFamily="mono">
-                  Workspace
-                </Text>
-                <Grid templateColumns={{ base: "repeat(2, minmax(0, 1fr))", sm: "repeat(3, minmax(0, 1fr))", lg: "1fr" }} gap="2">
-                  {workspaceSections.map((section) => {
-                    const active = activeSection === section;
+                  <Stack gap="3">
+                    <Text fontSize="xs" textTransform="uppercase" letterSpacing="0.18em" color="ui.textSubtle" fontFamily="mono">
+                      Workspace
+                    </Text>
+                    <Grid templateColumns={{ base: "repeat(2, minmax(0, 1fr))", sm: "repeat(3, minmax(0, 1fr))", lg: "1fr" }} gap="2">
+                      {workspaceSections.map((section) => {
+                        const active = activeSection === section;
 
-                    return (
-                      <Button
-                        key={section}
-                        justifyContent="flex-start"
-                        h="10"
-                        px="3"
-                        variant="ghost"
-                        bg={active ? "ui.surfaceHover" : "transparent"}
-                        color={active ? "ui.text" : "ui.textMuted"}
-                        border="1px solid"
-                        borderColor={active ? "ui.borderStrong" : "transparent"}
-                        borderLeft="2px solid"
-                        borderLeftColor={active ? "ui.accent" : "transparent"}
-                        borderRadius="control"
-                        _hover={{ bg: "ui.surfaceHover", color: "ui.text", borderColor: "ui.borderStrong" }}
-                        onClick={() => setActiveSection(section)}
-                      >
-                        <Text>{section}</Text>
-                      </Button>
-                    );
-                  })}
-                </Grid>
-              </Stack>
+                        return (
+                          <Button
+                            key={section}
+                            justifyContent="flex-start"
+                            h="10"
+                            px="3"
+                            variant="ghost"
+                            bg={active ? "ui.surfaceHover" : "transparent"}
+                            color={active ? "ui.text" : "ui.textMuted"}
+                            border="1px solid"
+                            borderColor={active ? "ui.borderStrong" : "transparent"}
+                            borderLeft="2px solid"
+                            borderLeftColor={active ? "ui.accent" : "transparent"}
+                            borderRadius="control"
+                            _hover={{ bg: "ui.surfaceHover", color: "ui.text", borderColor: "ui.borderStrong" }}
+                            onClick={() => setActiveSection(section)}
+                          >
+                            <Text>{section}</Text>
+                          </Button>
+                        );
+                      })}
+                    </Grid>
+                  </Stack>
+                </>
+              )}
             </Stack>
 
-            <Box bg="ui.cardAltAlpha" border="1px solid" borderColor="ui.border" borderRadius="panel" px="4" py="4">
-              <Stack gap="2">
-                <Text fontSize="xs" textTransform="uppercase" letterSpacing="0.18em" color="ui.textSubtle" fontFamily="mono">
-                  Active repo
-                </Text>
-                <Text fontSize="sm" fontWeight="600" color="ui.text">
-                  {repoName}
-                </Text>
-                <HStack align="start" gap="2">
-                  <Box h="2" w="2" mt="1.5" borderRadius="full" bg="ui.success" flexShrink="0" />
-                  <Text fontSize="sm" color="ui.textMuted" lineHeight="1.6">
-                    Connected and ready for a scoped task prompt.
+            {sidebarOpen && (
+              <Box bg="ui.cardAltAlpha" border="1px solid" borderColor="ui.border" borderRadius="panel" px="4" py="4">
+                <Stack gap="2">
+                  <Text fontSize="xs" textTransform="uppercase" letterSpacing="0.18em" color="ui.textSubtle" fontFamily="mono">
+                    Active repo
                   </Text>
-                </HStack>
-              </Stack>
-            </Box>
+                  <Text fontSize="sm" fontWeight="600" color="ui.text">
+                    {repoName}
+                  </Text>
+                  <HStack align="start" gap="2">
+                    <Box h="2" w="2" mt="1.5" borderRadius="full" bg="ui.success" flexShrink="0" />
+                    <Text fontSize="sm" color="ui.textMuted" lineHeight="1.6">
+                      Connected and ready for a scoped task prompt.
+                    </Text>
+                  </HStack>
+                </Stack>
+              </Box>
+            )}
           </Flex>
         </Box>
 
@@ -420,7 +450,7 @@ export default function App() {
 
               <Stack gap="4" position={{ xl: "sticky" }} top={{ xl: "6" }} alignSelf="start">
                 <Card.Root bg="ui.cardAltAlpha" border="1px solid" borderColor="ui.border" borderRadius="panel" shadow="hairline">
-                  <Card.Header px="5" py="4" borderBottom="1px solid" borderColor="ui.border">
+                  <Card.Header px="5" py="3" borderBottom="1px solid" borderColor="ui.border">
                     <Text fontSize="sm" fontWeight="600" color="ui.text">
                       Activity feed
                     </Text>
@@ -428,7 +458,7 @@ export default function App() {
                       Visible checkpoints from the workspace shell.
                     </Text>
                   </Card.Header>
-                  <Card.Body px="5" py="5">
+                  <Card.Body px="5" py="4">
                     <Stack gap="4">
                       {activityFeed.map((entry, index) => (
                         <Box key={entry.title}>
@@ -467,7 +497,7 @@ export default function App() {
                 </Card.Root>
 
                 <Card.Root bg="ui.cardAltAlpha" border="1px solid" borderColor="ui.border" borderRadius="panel" shadow="hairline">
-                  <Card.Header px="5" py="4" borderBottom="1px solid" borderColor="ui.border">
+                  <Card.Header px="5" py="3" borderBottom="1px solid" borderColor="ui.border">
                     <Text fontSize="sm" fontWeight="600" color="ui.text">
                       Task summary
                     </Text>
@@ -475,10 +505,10 @@ export default function App() {
                       Lightweight context that supports the main task surface.
                     </Text>
                   </Card.Header>
-                  <Card.Body px="5" py="5">
+                  <Card.Body px="5" py="4">
                     <Stack gap="3">
                       {summaryCards.map((card) => (
-                        <Box key={card.label} bg="ui.surfaceInset" border="1px solid" borderColor="ui.border" borderRadius="16px" px="4" py="4">
+                        <Box key={card.label} bg="ui.surfaceInset" border="1px solid" borderColor="ui.border" borderRadius="16px" px="3" py="3">
                           <Flex align="center" justify="space-between" gap="4">
                             <Stack gap="1" minW="0">
                               <HStack gap="2">
