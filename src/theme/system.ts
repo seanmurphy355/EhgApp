@@ -5,6 +5,10 @@ function v(raw: string) {
   return { value: raw };
 }
 
+function sv(raw: string) {
+  return { value: { _light: raw, _dark: raw } };
+}
+
 function mapRecord(record: Record<string, string>) {
   return Object.fromEntries(
     Object.entries(record).map(([k, val]) => [k, v(val)])
@@ -68,42 +72,42 @@ const config = defineConfig({
     semanticTokens: {
       colors: {
         bg: {
-          DEFAULT: v(colors.ui.bg),
-          panel: v(colors.ui.shell),
-          subtle: v(colors.ui.surfaceInset),
-          muted: v(colors.ui.surfaceAlt),
-          emphasized: v(colors.ui.surfaceRaised),
-          inverted: v(colors.ui.text),
+          DEFAULT: sv(colors.ui.bg),
+          panel: sv(colors.ui.shell),
+          subtle: sv(colors.ui.surfaceInset),
+          muted: sv(colors.ui.surface),
+          emphasized: sv(colors.ui.surfaceRaised),
+          inverted: sv(colors.ui.text),
         },
         fg: {
-          DEFAULT: v(colors.ui.text),
-          muted: v(colors.ui.textMuted),
-          subtle: v(colors.ui.textSubtle),
-          inverted: v(colors.ui.bg),
+          DEFAULT: sv(colors.ui.text),
+          muted: sv(colors.ui.textMuted),
+          subtle: sv(colors.ui.textSubtle),
+          inverted: sv(colors.ui.bg),
         },
         border: {
-          DEFAULT: v(colors.ui.border),
-          muted: v(colors.ui.surfaceAlt),
-          subtle: v(colors.ui.surfaceHover),
-          emphasized: v(colors.ui.borderStrong),
-          inverted: v(colors.ui.textMuted),
+          DEFAULT: sv(colors.ui.border),
+          muted: sv(colors.ui.surfaceAlt),
+          subtle: sv(colors.ui.surfaceHover),
+          emphasized: sv(colors.ui.borderStrong),
+          inverted: sv(colors.ui.textMuted),
         },
         accent: {
-          DEFAULT: v(colors.ui.accent),
-          subtle: v(colors.ui.accentSoft),
-          emphasized: v(colors.ui.accentHover),
+          DEFAULT: sv(colors.ui.accent),
+          subtle: sv(colors.ui.accentSoft),
+          emphasized: sv(colors.ui.accentHover),
         },
         success: {
-          DEFAULT: v(colors.ui.success),
+          DEFAULT: sv(colors.ui.success),
         },
         warning: {
-          DEFAULT: v(colors.ui.warning),
+          DEFAULT: sv(colors.ui.warning),
         },
         danger: {
-          DEFAULT: v(colors.ui.danger),
+          DEFAULT: sv(colors.ui.danger),
         },
         violet: {
-          DEFAULT: v(colors.ui.violet),
+          DEFAULT: sv(colors.ui.violet),
         },
       },
     },

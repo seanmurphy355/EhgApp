@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   Box,
   Button,
@@ -25,7 +25,21 @@ import {
   Settings as SettingsIcon,
 } from "lucide-react";
 import { AsciiArtAnimation } from "./components/AsciiArtAnimation";
+import { AureliaLanding } from "./components/AureliaLanding";
+import { SettingsSurface } from "./components/SettingsSurface";
+import { fieldStyles, secondaryButtonStyles } from "./components/workspaceStyles";
 import { Tooltip } from "./components/ui/tooltip";
+import {
+  ensureSession,
+  fetchActivity,
+  fetchActivitySummary,
+  getApiBaseUrl,
+  runTask,
+  toUserMessage,
+  type ActivityItem,
+  type ActivitySummaryResponse,
+} from "./lib/api";
+import { loadWorkspaceSettings, saveWorkspaceSettings, type WorkspaceSettings } from "./lib/settings";
 
 const workspaceSections = [
   { label: "Home", icon: HomeIcon },
@@ -36,62 +50,136 @@ const workspaceSections = [
   { label: "Settings", icon: SettingsIcon },
 ] as const;
 
-const activityFeed = [
+type ActivityFeedEntry = {
+  id: string;
+  title: string;
+  detail: string;
+  tone: string;
+};
+
+type SummaryCardEntry = {
+  label: string;
+  value: string;
+  hint: string;
+  tone: string;
+};
+
+const defaultActivityFeed: ActivityFeedEntry[] = [
   {
+    id: "seed-1",
     title: "Repository linked",
     detail: "Connected to repository and waiting for a scoped research brief.",
     tone: "ui.accent",
   },
   {
+    id: "seed-2",
     title: "Research queue ready",
     detail: "Prepared to collect sources, summarize findings, and surface diffs for review.",
     tone: "ui.violet",
   },
   {
+    id: "seed-3",
     title: "Review trail visible",
     detail: "Keeps an inspectable activity log so decisions stay visible while work is in flight.",
     tone: "ui.success",
   },
 ];
 
-const summaryCards = [
-  { label: "Tasks today", value: "04", hint: "2 active, 2 waiting", tone: "ui.accent" },
-  { label: "Sources linked", value: "18", hint: "notes, papers, repos", tone: "ui.success" },
-  { label: "Review status", value: "Ready", hint: "waiting on a new brief", tone: "ui.violet" },
+const defaultSummaryCards: SummaryCardEntry[] = [
+  { label: "Tasks today", value: "00", hint: "no tasks yet", tone: "ui.accent" },
+  { label: "Events today", value: "00", hint: "activity tracked live", tone: "ui.success" },
+  { label: "Last activity", value: "--", hint: "waiting on first event", tone: "ui.violet" },
 ];
 
 const promptSuggestions = [
   "Compare recent agent frameworks for enterprise research workflows.",
   "Summarize model evaluation approaches for lab automation teams.",
   "Review local-first orchestration options with citation support.",
-];
+] as const;
 
-const fieldStyles = {
-  bg: "ui.surfaceInset",
-  border: "1px solid",
-  borderColor: "ui.border",
-  borderRadius: "control",
-  color: "ui.text",
-  _placeholder: { color: "ui.textSubtle" },
-  _hover: { borderColor: "ui.borderStrong" },
-  _focusVisible: {
-    borderColor: "ui.focus",
-    boxShadow: "0 0 0 1px var(--chakra-colors-ui-focus)",
-  },
-} as const;
+function mapToneForActivity(item: ActivityItem): string {
+  if (item.type === "task.run_requested") {
+    return "ui.accent";
+  }
 
-const secondaryButtonStyles = {
-  bg: "transparent",
-  color: "ui.textMuted",
-  border: "1px solid",
-  borderColor: "ui.border",
-  borderRadius: "control",
-  _hover: {
-    bg: "ui.surfaceHover",
-    borderColor: "ui.borderStrong",
-    color: "ui.text",
+  if (item.type === "session.created") {
+    return "ui.success";
+  }
+
+  return "ui.violet";
+}
+
+function mapTitleForActivity(item: ActivityItem): string {
+  if (item.type === "task.run_requested") {
+    return "Task run requested";
+  }
+
+  if (item.type === "session.created") {
+    return "Session created";
+  }
+
+  return "System update";
+}
+
+function toFeedEntry(item: ActivityItem): ActivityFeedEntry {
+  return {
+    id: item.id,
+    title: mapTitleForActivity(item),
+    detail: item.detail,
+    tone: mapToneForActivity(item),
+  };
+}
+
+function toSummaryCards(summary: ActivitySummaryResponse): SummaryCardEntry[] {
+  const lastEvent = summary.lastEventAt
+    ? new Date(summary.lastEventAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })
+    : "--";
+
+  return [
+    {
+      label: "Tasks today",
+      value: String(summary.tasksToday).padStart(2, "0"),
+      hint: "task.run_requested events",
+      tone: "ui.accent",
+    },
+    {
+      label: "Events today",
+      value: String(summary.eventsToday).padStart(2, "0"),
+      hint: "all events since midnight",
+      tone: "ui.success",
+    },
+    {
+      label: "Last activity",
+      value: lastEvent,
+      hint: summary.lastEventAt ? "latest event timestamp" : "waiting on first event",
+      tone: "ui.violet",
+    },
+  ];
+}
+
+const workspaceDescriptions: Record<string, { title: string; detail: string }> = {
+  Tasks: {
+    title: "Task operations",
+    detail: "Run scoped research work, keep prompts reviewable, and monitor active investigations from a calmer operating surface.",
   },
-} as const;
+  Activity: {
+    title: "Activity overview",
+    detail: "Track execution checkpoints, surfaced findings, and decision trails without losing the surrounding research context.",
+  },
+  Repos: {
+    title: "Repository context",
+    detail: "Keep source materials, repo state, and working prompts connected while research programs move through execution.",
+  },
+  Prompts: {
+    title: "Prompt workspace",
+    detail: "Draft, revise, and reuse investigation prompts in a shell built for traceable research operations.",
+  },
+  Settings: {
+    title: "Research hub settings",
+    detail: "Tune the operating environment, visibility model, and review posture that support the broader research hub.",
+  },
+};
+
 
 const sidebarIconButtonStyles = {
   variant: "ghost",
@@ -117,6 +205,358 @@ const sidebarIconButtonStyles = {
   },
 } as const;
 
+type WorkspaceSurfaceProps = {
+  activeSection: string;
+  repoName: string;
+  prompt: string;
+  activityFeed: ActivityFeedEntry[];
+  summaryCards: SummaryCardEntry[];
+  isBackendSyncing: boolean;
+  isRunningTask: boolean;
+  backendError: string | null;
+  canRunTask: boolean;
+  onRepoNameChange: (value: string) => void;
+  onPromptChange: (value: string) => void;
+  onRunTask: () => void;
+  onRetryBackend: () => void;
+};
+
+function WorkspaceSurface({
+  activeSection,
+  repoName,
+  prompt,
+  activityFeed,
+  summaryCards,
+  isBackendSyncing,
+  isRunningTask,
+  backendError,
+  canRunTask,
+  onRepoNameChange,
+  onPromptChange,
+  onRunTask,
+  onRetryBackend,
+}: WorkspaceSurfaceProps) {
+  const sectionContent = workspaceDescriptions[activeSection] ?? {
+    title: "Agent workspace",
+    detail: "Run scoped research work, keep prompts reviewable, and monitor activity from a calm operational shell.",
+  };
+
+  const connectionLabel = backendError ? "Backend offline" : isBackendSyncing ? "Syncing backend" : "Connected";
+  const connectionTone = backendError ? "ui.warning" : "ui.success";
+
+  return (
+    <Stack gap={{ base: "6", xl: "8" }}>
+      <Flex
+        direction={{ base: "column", xl: "row" }}
+        align={{ base: "start", xl: "center" }}
+        justify="space-between"
+        gap="5"
+        pb="5"
+        borderBottom="1px solid"
+        borderColor="ui.border"
+      >
+        <Stack gap="3" minW="0">
+          <Flex gap="2" wrap="wrap">
+            <HStack
+              gap="2"
+              px="3"
+              py="1.5"
+              border="1px solid"
+              borderColor="ui.border"
+              borderRadius="full"
+              bg="ui.pillAlpha"
+              w="fit-content"
+            >
+              <Text fontSize="xs" textTransform="uppercase" letterSpacing="0.16em" color="ui.textSubtle" fontFamily="mono">
+                {activeSection}
+              </Text>
+            </HStack>
+            <HStack
+              gap="2"
+              px="3"
+              py="1.5"
+              border="1px solid"
+              borderColor="ui.accentBorder"
+              borderRadius="full"
+              bg="ui.accentMuted"
+              w="fit-content"
+            >
+              <Box h="2" w="2" borderRadius="full" bg="ui.accentSoft" />
+              <Text fontSize="sm" color="ui.text">
+                {repoName}
+              </Text>
+            </HStack>
+            <HStack
+              gap="2"
+              px="3"
+              py="1.5"
+              border="1px solid"
+              borderColor="ui.border"
+              borderRadius="full"
+              bg="ui.pillAlpha"
+              w="fit-content"
+            >
+              <Box h="2" w="2" borderRadius="full" bg={connectionTone} />
+              <Text fontSize="sm" color="ui.textMuted">
+                {connectionLabel}
+              </Text>
+            </HStack>
+          </Flex>
+
+          <Stack gap="1" minW="0">
+            <Heading as="h1" fontSize={{ base: "2xl", md: "3xl" }} letterSpacing="-0.04em" lineHeight="1.05">
+              {sectionContent.title}
+            </Heading>
+            <Text fontSize={{ base: "sm", md: "md" }} lineHeight="1.8" color="ui.textMuted" maxW="4xl">
+              {sectionContent.detail}
+            </Text>
+          </Stack>
+        </Stack>
+
+        <Flex gap="3" wrap="wrap" w={{ base: "full", md: "auto" }}>
+          <Button {...secondaryButtonStyles} flex={{ base: "1", md: "0" }}>
+            Open repo
+          </Button>
+          <Button
+            bg="ui.accent"
+            color="white"
+            borderRadius="control"
+            px="5"
+            flex={{ base: "1", md: "0" }}
+            _hover={{ bg: "ui.accentHover" }}
+            onClick={onRunTask}
+            disabled={!canRunTask || isBackendSyncing || isRunningTask}
+          >
+            {isRunningTask ? "Running..." : "Start task"}
+          </Button>
+        </Flex>
+      </Flex>
+
+      {backendError ? (
+        <Card.Root bg="ui.cardAltAlpha" border="1px solid" borderColor="ui.warning" borderRadius="panel" shadow="hairline">
+          <Card.Body px="5" py="4">
+            <Flex direction={{ base: "column", md: "row" }} gap="4" justify="space-between" align={{ md: "center" }}>
+              <Stack gap="1">
+                <Text fontSize="sm" fontWeight="600" color="ui.text">
+                  Backend unavailable
+                </Text>
+                <Text fontSize="sm" color="ui.textMuted" lineHeight="1.6">
+                  {backendError}
+                </Text>
+              </Stack>
+              <Button {...secondaryButtonStyles} onClick={onRetryBackend} minW={{ md: "150px" }}>
+                Retry backend
+              </Button>
+            </Flex>
+          </Card.Body>
+        </Card.Root>
+      ) : null}
+
+      <Grid templateColumns={{ base: "1fr", xl: "minmax(0, 1fr) 340px" }} gap="6" alignItems="start">
+        <Card.Root bg="ui.cardAlpha" border="1px solid" borderColor="ui.border" borderRadius="panel" shadow="panel" overflow="hidden">
+          <Card.Header px={{ base: "5", md: "6" }} py="5" borderBottom="1px solid" borderColor="ui.border">
+            <Flex direction={{ base: "column", md: "row" }} align={{ base: "start", md: "center" }} justify="space-between" gap="4">
+              <Stack gap="1">
+                <Text fontSize="xs" textTransform="uppercase" letterSpacing="0.18em" color="ui.textSubtle" fontFamily="mono">
+                  Quick start
+                </Text>
+                <Heading as="h2" fontSize={{ base: "xl", md: "2xl" }} letterSpacing="-0.03em">
+                  Start a task
+                </Heading>
+                <Text fontSize="sm" color="ui.textMuted" maxW="2xl">
+                  Give the agent one clear objective, then keep context, activity, and review state in view from the surrounding workspace.
+                </Text>
+              </Stack>
+
+              <Flex gap="2" wrap="wrap">
+                <HStack gap="2" px="3" py="1.5" border="1px solid" borderColor="ui.border" borderRadius="full" bg="ui.surfaceInset">
+                  <Box h="2" w="2" borderRadius="full" bg={connectionTone} />
+                  <Text fontSize="sm" color="ui.textMuted">
+                    {connectionLabel}
+                  </Text>
+                </HStack>
+                <HStack gap="2" px="3" py="1.5" border="1px solid" borderColor="ui.border" borderRadius="full" bg="ui.surfaceInset">
+                  <Box h="2" w="2" borderRadius="full" bg="ui.violet" />
+                  <Text fontSize="sm" color="ui.textMuted">
+                    Traceable activity
+                  </Text>
+                </HStack>
+                <HStack gap="2" px="3" py="1.5" border="1px solid" borderColor="ui.border" borderRadius="full" bg="ui.surfaceInset">
+                  <Box h="2" w="2" borderRadius="full" bg="ui.warning" />
+                  <Text fontSize="sm" color="ui.textMuted">
+                    Reviewable output
+                  </Text>
+                </HStack>
+              </Flex>
+            </Flex>
+          </Card.Header>
+
+          <Card.Body px={{ base: "5", md: "6" }} py={{ base: "5", md: "6" }}>
+            <Stack gap="6">
+              <Box>
+                <Text mb="2" fontSize="xs" textTransform="uppercase" letterSpacing="0.18em" color="ui.textSubtle" fontFamily="mono">
+                  Repository
+                </Text>
+                <Input value={repoName} onChange={(event) => onRepoNameChange(event.target.value)} {...fieldStyles} />
+              </Box>
+
+              <Box>
+                <Text mb="2" fontSize="xs" textTransform="uppercase" letterSpacing="0.18em" color="ui.textSubtle" fontFamily="mono">
+                  Task prompt
+                </Text>
+                <Textarea
+                  value={prompt}
+                  onChange={(event) => onPromptChange(event.target.value)}
+                  minH={{ base: "220px", md: "240px" }}
+                  resize="vertical"
+                  {...fieldStyles}
+                />
+              </Box>
+
+              <Stack gap="3">
+                <Text fontSize="xs" textTransform="uppercase" letterSpacing="0.18em" color="ui.textSubtle" fontFamily="mono">
+                  Suggested prompts
+                </Text>
+                <Stack gap="2.5">
+                  {promptSuggestions.map((item) => (
+                    <Button
+                      key={item}
+                      justifyContent="start"
+                      textAlign="left"
+                      whiteSpace="normal"
+                      h="auto"
+                      py="3"
+                      px="4"
+                      variant="ghost"
+                      border="1px solid"
+                      borderColor="ui.border"
+                      borderRadius="control"
+                      bg="ui.surfaceInset"
+                      color="ui.textMuted"
+                      _hover={{ bg: "ui.surfaceHover", color: "ui.text" }}
+                      onClick={() => onPromptChange(item)}
+                    >
+                      {item}
+                    </Button>
+                  ))}
+                </Stack>
+              </Stack>
+
+              <Flex direction={{ base: "column", md: "row" }} justify="space-between" align={{ base: "start", md: "center" }} gap="4">
+                <Text fontSize="sm" color="ui.textMuted" maxW="2xl" lineHeight="1.7">
+                  Keep prompts scoped, concrete, and reviewable so the workspace stays useful once the activity rail starts filling up.
+                </Text>
+                <Button
+                  bg="ui.accent"
+                  color="white"
+                  borderRadius="control"
+                  px="5"
+                  minW={{ md: "140px" }}
+                  _hover={{ bg: "ui.accentHover" }}
+                  onClick={onRunTask}
+                  disabled={!canRunTask || isBackendSyncing || isRunningTask}
+                >
+                  {isRunningTask ? "Running..." : "Run task"}
+                </Button>
+              </Flex>
+            </Stack>
+          </Card.Body>
+        </Card.Root>
+
+        <Stack gap="4" position={{ xl: "sticky" }} top={{ xl: "6" }} alignSelf="start">
+          <Card.Root bg="ui.cardAltAlpha" border="1px solid" borderColor="ui.border" borderRadius="panel" shadow="hairline">
+            <Card.Header px="5" py="3" borderBottom="1px solid" borderColor="ui.border">
+              <Text fontSize="sm" fontWeight="600" color="ui.text">
+                Activity feed
+              </Text>
+              <Text mt="1" fontSize="xs" color="ui.textSubtle">
+                Visible checkpoints from the workspace shell.
+              </Text>
+            </Card.Header>
+            <Card.Body px="5" py="4">
+              <Stack gap="4">
+                {activityFeed.map((entry, index) => (
+                  <Box key={entry.id}>
+                    <HStack align="start" gap="3">
+                      <Flex
+                        mt="0.5"
+                        h="6"
+                        w="6"
+                        align="center"
+                        justify="center"
+                        borderRadius="full"
+                        bg="ui.surfaceInset"
+                        border="1px solid"
+                        borderColor="ui.borderStrong"
+                        color={entry.tone}
+                        fontSize="xs"
+                        fontFamily="mono"
+                        flexShrink="0"
+                      >
+                        {index + 1}
+                      </Flex>
+                      <Stack gap="1" minW="0">
+                        <Text fontSize="sm" fontWeight="600" color="ui.text">
+                          {entry.title}
+                        </Text>
+                        <Text fontSize="sm" lineHeight="1.7" color="ui.textMuted">
+                          {entry.detail}
+                        </Text>
+                      </Stack>
+                    </HStack>
+                    {index < activityFeed.length - 1 ? <Separator mt="4" borderColor="ui.border" /> : null}
+                  </Box>
+                ))}
+              </Stack>
+            </Card.Body>
+          </Card.Root>
+
+          <Card.Root bg="ui.cardAltAlpha" border="1px solid" borderColor="ui.border" borderRadius="panel" shadow="hairline">
+            <Card.Header px="5" py="3" borderBottom="1px solid" borderColor="ui.border">
+              <Text fontSize="sm" fontWeight="600" color="ui.text">
+                Task summary
+              </Text>
+              <Text mt="1" fontSize="xs" color="ui.textSubtle">
+                Lightweight context that supports the main task surface.
+              </Text>
+            </Card.Header>
+            <Card.Body px="5" py="4">
+              <Stack gap="3">
+                {summaryCards.map((card) => (
+                  <Box key={card.label} bg="ui.surfaceInset" border="1px solid" borderColor="ui.border" borderRadius="16px" px="3" py="3">
+                    <Flex align="center" justify="space-between" gap="4">
+                      <Stack gap="1" minW="0">
+                        <HStack gap="2">
+                          <Box h="2" w="2" borderRadius="full" bg={card.tone} />
+                          <Text fontSize="xs" textTransform="uppercase" letterSpacing="0.16em" color="ui.textSubtle" fontFamily="mono">
+                            {card.label}
+                          </Text>
+                        </HStack>
+                        <Text fontSize="sm" color="ui.textMuted">
+                          {card.hint}
+                        </Text>
+                      </Stack>
+                      <Text
+                        fontSize={card.value.length > 4 ? "xl" : "2xl"}
+                        fontWeight="700"
+                        letterSpacing="-0.03em"
+                        color={card.tone}
+                        textAlign="right"
+                      >
+                        {card.value}
+                      </Text>
+                    </Flex>
+                  </Box>
+                ))}
+              </Stack>
+            </Card.Body>
+          </Card.Root>
+        </Stack>
+      </Grid>
+    </Stack>
+  );
+}
+
 export default function App() {
   const [activeSection, setActiveSection] = useState("Home");
   const [repoName, setRepoName] = useState("ehg/agent-research-lab");
@@ -124,6 +564,69 @@ export default function App() {
   const [prompt, setPrompt] = useState(
     "Research how top teams structure citation-aware agent workflows for technical investigation and synthesis."
   );
+  const [activityFeed, setActivityFeed] = useState<ActivityFeedEntry[]>(defaultActivityFeed);
+  const [summaryCards, setSummaryCards] = useState<SummaryCardEntry[]>(defaultSummaryCards);
+  const [backendError, setBackendError] = useState<string | null>(null);
+  const [isBackendSyncing, setIsBackendSyncing] = useState(false);
+  const [isRunningTask, setIsRunningTask] = useState(false);
+  const [workspaceSettings, setWorkspaceSettings] = useState<WorkspaceSettings>(() => loadWorkspaceSettings());
+
+  const syncBackendData = useCallback(async () => {
+    setIsBackendSyncing(true);
+
+    try {
+      await ensureSession();
+
+      const [activityResult, summaryResult] = await Promise.all([fetchActivity(50), fetchActivitySummary()]);
+
+      setActivityFeed(activityResult.items.length > 0 ? activityResult.items.map(toFeedEntry) : defaultActivityFeed);
+      setSummaryCards(toSummaryCards(summaryResult));
+      setBackendError(null);
+    } catch (error) {
+      const message = `${toUserMessage(error)} (API: ${getApiBaseUrl()})`;
+      setBackendError(message);
+      setActivityFeed(defaultActivityFeed);
+      setSummaryCards(defaultSummaryCards);
+    } finally {
+      setIsBackendSyncing(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    void syncBackendData();
+  }, [syncBackendData]);
+
+  const canRunTask = useMemo(() => {
+    return repoName.trim().length > 0 && prompt.trim().length > 0;
+  }, [repoName, prompt]);
+
+  const handleRunTask = useCallback(async () => {
+    if (!repoName.trim() || !prompt.trim()) {
+      return;
+    }
+
+    setIsRunningTask(true);
+
+    try {
+      await ensureSession();
+      const result = await runTask({ repo: repoName.trim(), prompt: prompt.trim() });
+      const summaryResult = await fetchActivitySummary();
+      const nextEntry = toFeedEntry(result.activity);
+
+      setActivityFeed((current) => [nextEntry, ...current.filter((entry) => entry.id !== nextEntry.id)].slice(0, 50));
+      setSummaryCards(toSummaryCards(summaryResult));
+      setBackendError(null);
+    } catch (error) {
+      setBackendError(`${toUserMessage(error)} (API: ${getApiBaseUrl()})`);
+    } finally {
+      setIsRunningTask(false);
+    }
+  }, [prompt, repoName]);
+
+  const handleSaveSettings = useCallback((nextSettings: WorkspaceSettings) => {
+    const persistedSettings = saveWorkspaceSettings(nextSettings);
+    setWorkspaceSettings(persistedSettings);
+  }, []);
 
   return (
     <Box minH="100vh" bg="ui.bg" color="ui.text" position="relative" overflowX="clip">
@@ -165,29 +668,23 @@ export default function App() {
                 w="full"
               >
                 <HStack gap="3" align="center" minW="0" justify={{ base: "flex-start", lg: sidebarOpen ? "flex-start" : "center" }}>
-                  <Flex
-                    h="10"
-                    w="10"
-                    align="center"
-                    justify="center"
-                    borderRadius="16px"
-                    bg="ui.surfaceInset"
-                    border="1px solid"
-                    borderColor="ui.border"
-                    color="ui.accentSoft"
-                    fontWeight="700"
-                    fontSize="sm"
-                    letterSpacing="-0.03em"
-                    flexShrink="0"
-                  >
-                    J
-                  </Flex>
+                  <img
+                    src="/logo.png"
+                    alt="Aurelia"
+                    draggable={false}
+                    style={{
+                      height: "2.5rem",
+                      width: "2.5rem",
+                      borderRadius: "16px",
+                      flexShrink: 0,
+                    }}
+                  />
                   <Stack gap="0" minW="0" display={{ base: "flex", lg: sidebarOpen ? "flex" : "none" }}>
                     <Text fontSize="sm" fontWeight="600" color="ui.text" truncate>
-                      Jules-style Lab
+                      Aurelia
                     </Text>
                     <Text fontSize="xs" color="ui.textMuted" truncate>
-                      Agent workspace shell
+                      Research operating system
                     </Text>
                   </Stack>
                 </HStack>
@@ -294,314 +791,28 @@ export default function App() {
         </Box>
 
         <Box as="main" minW="0">
-          <Stack gap={{ base: "6", xl: "8" }} px={{ base: "4", md: "6", xl: "8" }} py={{ base: "4", md: "6" }} maxW="1500px" mr="auto">
-            <Flex
-              direction={{ base: "column", xl: "row" }}
-              align={{ base: "start", xl: "center" }}
-              justify="space-between"
-              gap="5"
-              pb="5"
-              borderBottom="1px solid"
-              borderColor="ui.border"
-            >
-              <Stack gap="3" minW="0">
-                <Flex gap="2" wrap="wrap">
-                  <HStack
-                    gap="2"
-                    px="3"
-                    py="1.5"
-                    border="1px solid"
-                    borderColor="ui.border"
-                    borderRadius="full"
-                    bg="ui.pillAlpha"
-                    w="fit-content"
-                  >
-                    <Text fontSize="xs" textTransform="uppercase" letterSpacing="0.16em" color="ui.textSubtle" fontFamily="mono">
-                      Home
-                    </Text>
-                  </HStack>
-                  <HStack
-                    gap="2"
-                    px="3"
-                    py="1.5"
-                    border="1px solid"
-                    borderColor="ui.accentBorder"
-                    borderRadius="full"
-                    bg="ui.accentMuted"
-                    w="fit-content"
-                  >
-                    <Box h="2" w="2" borderRadius="full" bg="ui.accentSoft" />
-                    <Text fontSize="sm" color="ui.text">
-                      {repoName}
-                    </Text>
-                  </HStack>
-                  <HStack
-                    gap="2"
-                    px="3"
-                    py="1.5"
-                    border="1px solid"
-                    borderColor="ui.border"
-                    borderRadius="full"
-                    bg="ui.pillAlpha"
-                    w="fit-content"
-                  >
-                    <Box h="2" w="2" borderRadius="full" bg="ui.success" />
-                    <Text fontSize="sm" color="ui.textMuted">
-                      Activity visible
-                    </Text>
-                  </HStack>
-                </Flex>
-
-                <Stack gap="1" minW="0">
-                  <Heading as="h1" fontSize={{ base: "2xl", md: "3xl" }} letterSpacing="-0.04em" lineHeight="1.05">
-                    Agent workspace
-                  </Heading>
-                  <Text fontSize={{ base: "sm", md: "md" }} lineHeight="1.8" color="ui.textMuted" maxW="4xl">
-                    Left-aligned task entry, repo context, and review activity in a calmer shell that reads like a workspace instead of a landing page.
-                  </Text>
-                </Stack>
-              </Stack>
-
-              <Flex gap="3" wrap="wrap" w={{ base: "full", md: "auto" }}>
-                <Button {...secondaryButtonStyles} flex={{ base: "1", md: "0" }}>
-                  Open repo
-                </Button>
-                <Button
-                  bg="ui.accent"
-                  color="white"
-                  borderRadius="control"
-                  px="5"
-                  flex={{ base: "1", md: "0" }}
-                  _hover={{ bg: "ui.accentHover" }}
-                >
-                  Start task
-                </Button>
-              </Flex>
-            </Flex>
-
-            <Grid templateColumns={{ base: "1fr", xl: "minmax(0, 1fr) 340px" }} gap="6" alignItems="start">
-              <Card.Root bg="ui.cardAlpha" border="1px solid" borderColor="ui.border" borderRadius="panel" shadow="panel" overflow="hidden">
-                <Card.Header px={{ base: "5", md: "6" }} py="5" borderBottom="1px solid" borderColor="ui.border">
-                  <Flex direction={{ base: "column", md: "row" }} align={{ base: "start", md: "center" }} justify="space-between" gap="4">
-                    <Stack gap="1">
-                      <Text fontSize="xs" textTransform="uppercase" letterSpacing="0.18em" color="ui.textSubtle" fontFamily="mono">
-                        Quick start
-                      </Text>
-                      <Heading as="h2" fontSize={{ base: "xl", md: "2xl" }} letterSpacing="-0.03em">
-                        Start a task
-                      </Heading>
-                      <Text fontSize="sm" color="ui.textMuted" maxW="2xl">
-                        Give the agent one clear objective, then keep context, activity, and review state in view from the surrounding workspace.
-                      </Text>
-                    </Stack>
-
-                    <Flex gap="2" wrap="wrap">
-                      <HStack
-                        gap="2"
-                        px="3"
-                        py="1.5"
-                        border="1px solid"
-                        borderColor="ui.border"
-                        borderRadius="full"
-                        bg="ui.surfaceInset"
-                      >
-                        <Box h="2" w="2" borderRadius="full" bg="ui.success" />
-                        <Text fontSize="sm" color="ui.textMuted">
-                          Connected
-                        </Text>
-                      </HStack>
-                      <HStack
-                        gap="2"
-                        px="3"
-                        py="1.5"
-                        border="1px solid"
-                        borderColor="ui.border"
-                        borderRadius="full"
-                        bg="ui.surfaceInset"
-                      >
-                        <Box h="2" w="2" borderRadius="full" bg="ui.violet" />
-                        <Text fontSize="sm" color="ui.textMuted">
-                          Traceable activity
-                        </Text>
-                      </HStack>
-                      <HStack
-                        gap="2"
-                        px="3"
-                        py="1.5"
-                        border="1px solid"
-                        borderColor="ui.border"
-                        borderRadius="full"
-                        bg="ui.surfaceInset"
-                      >
-                        <Box h="2" w="2" borderRadius="full" bg="ui.warning" />
-                        <Text fontSize="sm" color="ui.textMuted">
-                          Reviewable output
-                        </Text>
-                      </HStack>
-                    </Flex>
-                  </Flex>
-                </Card.Header>
-
-                <Card.Body px={{ base: "5", md: "6" }} py={{ base: "5", md: "6" }}>
-                  <Stack gap="6">
-                    <Box>
-                      <Text mb="2" fontSize="xs" textTransform="uppercase" letterSpacing="0.18em" color="ui.textSubtle" fontFamily="mono">
-                        Repository
-                      </Text>
-                      <Input value={repoName} onChange={(event) => setRepoName(event.target.value)} {...fieldStyles} />
-                    </Box>
-
-                    <Box>
-                      <Text mb="2" fontSize="xs" textTransform="uppercase" letterSpacing="0.18em" color="ui.textSubtle" fontFamily="mono">
-                        Task prompt
-                      </Text>
-                      <Textarea
-                        value={prompt}
-                        onChange={(event) => setPrompt(event.target.value)}
-                        minH={{ base: "220px", md: "240px" }}
-                        resize="vertical"
-                        {...fieldStyles}
-                      />
-                    </Box>
-
-                    <Stack gap="3">
-                      <Text fontSize="xs" textTransform="uppercase" letterSpacing="0.18em" color="ui.textSubtle" fontFamily="mono">
-                        Suggested prompts
-                      </Text>
-                      <Stack gap="2.5">
-                        {promptSuggestions.map((item) => (
-                          <Button
-                            key={item}
-                            justifyContent="start"
-                            textAlign="left"
-                            whiteSpace="normal"
-                            h="auto"
-                            py="3"
-                            px="4"
-                            variant="ghost"
-                            border="1px solid"
-                            borderColor="ui.border"
-                            borderRadius="control"
-                            bg="ui.surfaceInset"
-                            color="ui.textMuted"
-                            _hover={{ bg: "ui.surfaceHover", color: "ui.text" }}
-                            onClick={() => setPrompt(item)}
-                          >
-                            {item}
-                          </Button>
-                        ))}
-                      </Stack>
-                    </Stack>
-
-                    <Flex direction={{ base: "column", md: "row" }} justify="space-between" align={{ base: "start", md: "center" }} gap="4">
-                      <Text fontSize="sm" color="ui.textMuted" maxW="2xl" lineHeight="1.7">
-                        Keep prompts scoped, concrete, and reviewable so the workspace stays useful once the activity rail starts filling up.
-                      </Text>
-                      <Button
-                        bg="ui.accent"
-                        color="white"
-                        borderRadius="control"
-                        px="5"
-                        minW={{ md: "140px" }}
-                        _hover={{ bg: "ui.accentHover" }}
-                      >
-                        Run task
-                      </Button>
-                    </Flex>
-                  </Stack>
-                </Card.Body>
-              </Card.Root>
-
-              <Stack gap="4" position={{ xl: "sticky" }} top={{ xl: "6" }} alignSelf="start">
-                <Card.Root bg="ui.cardAltAlpha" border="1px solid" borderColor="ui.border" borderRadius="panel" shadow="hairline">
-                  <Card.Header px="5" py="3" borderBottom="1px solid" borderColor="ui.border">
-                    <Text fontSize="sm" fontWeight="600" color="ui.text">
-                      Activity feed
-                    </Text>
-                    <Text mt="1" fontSize="xs" color="ui.textSubtle">
-                      Visible checkpoints from the workspace shell.
-                    </Text>
-                  </Card.Header>
-                  <Card.Body px="5" py="4">
-                    <Stack gap="4">
-                      {activityFeed.map((entry, index) => (
-                        <Box key={entry.title}>
-                          <HStack align="start" gap="3">
-                            <Flex
-                              mt="0.5"
-                              h="6"
-                              w="6"
-                              align="center"
-                              justify="center"
-                              borderRadius="full"
-                              bg="ui.surfaceInset"
-                              border="1px solid"
-                              borderColor="ui.borderStrong"
-                              color={entry.tone}
-                              fontSize="xs"
-                              fontFamily="mono"
-                              flexShrink="0"
-                            >
-                              {index + 1}
-                            </Flex>
-                            <Stack gap="1" minW="0">
-                              <Text fontSize="sm" fontWeight="600" color="ui.text">
-                                {entry.title}
-                              </Text>
-                              <Text fontSize="sm" lineHeight="1.7" color="ui.textMuted">
-                                {entry.detail}
-                              </Text>
-                            </Stack>
-                          </HStack>
-                          {index < activityFeed.length - 1 ? <Separator mt="4" borderColor="ui.border" /> : null}
-                        </Box>
-                      ))}
-                    </Stack>
-                  </Card.Body>
-                </Card.Root>
-
-                <Card.Root bg="ui.cardAltAlpha" border="1px solid" borderColor="ui.border" borderRadius="panel" shadow="hairline">
-                  <Card.Header px="5" py="3" borderBottom="1px solid" borderColor="ui.border">
-                    <Text fontSize="sm" fontWeight="600" color="ui.text">
-                      Task summary
-                    </Text>
-                    <Text mt="1" fontSize="xs" color="ui.textSubtle">
-                      Lightweight context that supports the main task surface.
-                    </Text>
-                  </Card.Header>
-                  <Card.Body px="5" py="4">
-                    <Stack gap="3">
-                      {summaryCards.map((card) => (
-                        <Box key={card.label} bg="ui.surfaceInset" border="1px solid" borderColor="ui.border" borderRadius="16px" px="3" py="3">
-                          <Flex align="center" justify="space-between" gap="4">
-                            <Stack gap="1" minW="0">
-                              <HStack gap="2">
-                                <Box h="2" w="2" borderRadius="full" bg={card.tone} />
-                                <Text fontSize="xs" textTransform="uppercase" letterSpacing="0.16em" color="ui.textSubtle" fontFamily="mono">
-                                  {card.label}
-                                </Text>
-                              </HStack>
-                              <Text fontSize="sm" color="ui.textMuted">
-                                {card.hint}
-                              </Text>
-                            </Stack>
-                            <Text
-                              fontSize={card.value.length > 4 ? "xl" : "2xl"}
-                              fontWeight="700"
-                              letterSpacing="-0.03em"
-                              color={card.tone}
-                              textAlign="right"
-                            >
-                              {card.value}
-                            </Text>
-                          </Flex>
-                        </Box>
-                      ))}
-                    </Stack>
-                  </Card.Body>
-                </Card.Root>
-              </Stack>
-            </Grid>
+          <Stack gap={{ base: "6", xl: "8" }} px={{ base: "4", md: "6", xl: "8" }} py={{ base: "4", md: "6" }} maxW="1200px" mx="auto">
+            {activeSection === "Home" ? (
+              <AureliaLanding secondaryButtonStyles={secondaryButtonStyles} />
+            ) : activeSection === "Settings" ? (
+              <SettingsSurface settings={workspaceSettings} onSave={handleSaveSettings} />
+            ) : (
+              <WorkspaceSurface
+                activeSection={activeSection}
+                repoName={repoName}
+                prompt={prompt}
+                activityFeed={activityFeed}
+                summaryCards={summaryCards}
+                isBackendSyncing={isBackendSyncing}
+                isRunningTask={isRunningTask}
+                backendError={backendError}
+                canRunTask={canRunTask}
+                onRepoNameChange={setRepoName}
+                onPromptChange={setPrompt}
+                onRunTask={handleRunTask}
+                onRetryBackend={syncBackendData}
+              />
+            )}
           </Stack>
         </Box>
       </Grid>

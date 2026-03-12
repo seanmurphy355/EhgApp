@@ -8,6 +8,8 @@
     "build": "vite build",
     "preview": "vite preview --host 0.0.0.0 --port 4173",
     "typecheck": "tsc --noEmit",
+    "backend:setup": "cd backend && uv sync",
+    "backend:dev": "cd backend && uv run uvicorn aurelia_backend.main:app --host 127.0.0.1 --port 8787 --reload",
     "tauri": "tauri",
     "tauri:dev": "tauri dev",
     "tauri:build": "tauri build"
@@ -17,6 +19,7 @@
     "@emotion/react": "^11.14.0",
     "@tauri-apps/api": "^2.5.0",
     "lucide-react": "^0.577.0",
+    "motion": "^12.35.2",
     "react": "^19.2.4",
     "react-dom": "^19.2.4",
     "vite": "^7.3.1"

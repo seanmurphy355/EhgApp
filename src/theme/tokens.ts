@@ -1,20 +1,20 @@
 export const colors = {
   ui: {
-    bg: "#141316",
-    rail: "#16161A",
-    shell: "#1B1A1F",
-    surface: "#1F1F24",
-    surfaceAlt: "#24252B",
-    surfaceRaised: "#2D2C32",
-    surfaceHover: "#2A2B31",
-    surfaceInset: "#131418",
+    bg: "#0e0e0e",
+    rail: "#141414",
+    shell: "#1a1a1a",
+    surface: "#1f1f1f",
+    surfaceAlt: "#242424",
+    surfaceRaised: "#2d2d2d",
+    surfaceHover: "#2a2a2a",
+    surfaceInset: "#111111",
 
-    text: "#F2F0F4",
-    textMuted: "#A6A4B1",
-    textSubtle: "#817E91",
+    text: "#e8e8e8",
+    textMuted: "#a0a0a0",
+    textSubtle: "#707070",
 
-    border: "#2D2C32",
-    borderStrong: "#3A3941",
+    border: "#2d2d2d",
+    borderStrong: "#3a3a3a",
 
     accent: "#6B63D7",
     accentHover: "#5B54BC",
@@ -24,10 +24,10 @@ export const colors = {
     accentGlow: "#6B63D71F",
     accentGlowSoft: "#8D88DF14",
 
-    panelAlpha: "rgba(22,22,26,0.94)",
-    cardAlpha: "rgba(27,26,31,0.94)",
-    cardAltAlpha: "rgba(31,31,36,0.90)",
-    pillAlpha: "rgba(31,31,36,0.72)",
+    panelAlpha: "rgba(20,20,20,0.94)",
+    cardAlpha: "rgba(26,26,26,0.94)",
+    cardAltAlpha: "rgba(31,31,31,0.90)",
+    pillAlpha: "rgba(31,31,31,0.72)",
 
     success: "#2EDF72",
     warning: "#FFB64A",
@@ -51,22 +51,22 @@ export const colors = {
   },
 
   surface: {
-    50: "#F9F8FF",
-    100: "#F2F0FC",
-    200: "#DAD5F2",
-    300: "#C0B6F2",
-    400: "#A6A4B1",
-    500: "#817E91",
-    600: "#4B4952",
-    700: "#36353B",
-    800: "#24252B",
-    900: "#1B1A1F",
-    950: "#141316",
+    50: "#f5f5f5",
+    100: "#e8e8e8",
+    200: "#d0d0d0",
+    300: "#a0a0a0",
+    400: "#808080",
+    500: "#606060",
+    600: "#404040",
+    700: "#2d2d2d",
+    800: "#1f1f1f",
+    900: "#141414",
+    950: "#0e0e0e",
   },
 
   text: {
-    100: "#F2F0F4",
-    200: "#A6A4B1",
+    100: "#e8e8e8",
+    200: "#a0a0a0",
   },
 } as const;
 
@@ -82,7 +82,6 @@ export const radii = {
 } as const;
 
 export const shadows = {
-  panel: "0 0 0 1px rgba(58,57,65,0.88), 0 14px 36px rgba(0,0,0,0.28)",
-  hairline: "0 0 0 1px rgba(58,57,65,0.92)",
+  panel: "0 0 0 1px rgba(58,58,58,0.88), 0 14px 36px rgba(0,0,0,0.28)",
+  hairline: "0 0 0 1px rgba(58,58,58,0.92)",
 } as const;
-
