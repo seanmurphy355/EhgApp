@@ -8,7 +8,8 @@ export const fieldStyles = {
   _hover: { borderColor: "ui.borderStrong" },
   _focusVisible: {
     borderColor: "ui.focus",
-    boxShadow: "0 0 0 1px var(--chakra-colors-ui-focus)",
+    boxShadow:
+      "0 0 0 1px var(--chakra-colors-ui-focus), 0 0 12px var(--chakra-colors-ui-accentGlow)",
   },
 } as const;
 
@@ -23,4 +24,13 @@ export const secondaryButtonStyles = {
     borderColor: "ui.borderStrong",
     color: "ui.text",
   },
+} as const;
+
+export const primaryButtonStyles = {
+  bg: "ui.accent",
+  color: "white",
+  borderRadius: "control",
+  px: "5",
+  _hover: { bg: "ui.accentHover" },
+  _disabled: { opacity: 0.45, cursor: "not-allowed" },
 } as const;

@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { Box, Flex, Text } from "@chakra-ui/react";
 import { AnimatePresence, motion } from "motion/react";
+import { colors } from "../theme/tokens";
 
 type ResearchOrgTreeProps = {
   reducedMotion: boolean;
@@ -88,8 +89,8 @@ const SCENARIOS: readonly Scenario[] = [
 const NODE_MAP = new Map(NODES.map((n) => [n.id, n]));
 
 const HEX = {
-  accent: "#6B63D7",
-  border: "#3a3a3a",
+  accent: colors.ui.accent,
+  border: colors.ui.borderStrong,
 } as const;
 
 const NODE_HH = 7.5;
@@ -113,7 +114,6 @@ function elbowWaypoints(from: NodeDef, to: NodeDef): [string, string][] {
   ];
 }
 
-const STEP_MS = 1200;
 const HOLD_MS = 3200;
 const DOT_DURATION = 1.1;
 
@@ -135,7 +135,7 @@ export function ResearchOrgTree({ reducedMotion }: ResearchOrgTreeProps) {
     for (const n of NODES) activatedNodeIds.add(n.id);
   } else {
     activatedNodeIds.add(scenario.hops[0]!.from);
-    for (let i = 0; i < step; i++) {
+    for (let i = 0; i <= step && i < hopsLen; i++) {
       activatedNodeIds.add(scenario.hops[i]!.to);
     }
   }
@@ -161,12 +161,7 @@ export function ResearchOrgTree({ reducedMotion }: ResearchOrgTreeProps) {
 
   useEffect(() => {
     if (reducedMotion) return;
-    const scenarioHopsLen = SCENARIOS[idx]!.hops.length;
-
-    if (step < scenarioHopsLen) {
-      const id = setTimeout(() => setStep((s) => s + 1), STEP_MS);
-      return () => clearTimeout(id);
-    }
+    if (step < SCENARIOS[idx]!.hops.length) return;
 
     const id = setTimeout(() => {
       setIdx((p) => (p + 1) % SCENARIOS.length);
@@ -239,7 +234,7 @@ export function ResearchOrgTree({ reducedMotion }: ResearchOrgTreeProps) {
               initial={{
                 left: wp[0][0],
                 top: wp[0][1],
-                opacity: 0.5,
+                opacity: step === 0 ? 0.6 : 1,
               }}
               animate={{
                 left: wp.map((w) => w[0]),
@@ -251,6 +246,7 @@ export function ResearchOrgTree({ reducedMotion }: ResearchOrgTreeProps) {
                 ease: "linear",
                 times: [0, 0.33, 0.66, 1],
               }}
+              onAnimationComplete={() => setStep((s) => s + 1)}
             />
           );
         })()}

@@ -8,6 +8,16 @@ export type WorkspaceSettings = {
   showActivityRail: boolean;
 };
 
+export type Workspace = {
+  id: string;
+  name: string;
+  description: string;
+  createdAt: string;
+  settings: WorkspaceSettings;
+};
+
+const WORKSPACES_STORAGE_KEY = "aurelia.workspaces.v1";
+const LAST_WORKSPACE_KEY = "aurelia.last-workspace-id";
 export const WORKSPACE_SETTINGS_STORAGE_KEY = "aurelia.workspace-settings.v1";
 
 export const defaultWorkspaceSettings: WorkspaceSettings = {
@@ -65,6 +75,122 @@ function normalizeWorkspaceSettings(value: unknown): WorkspaceSettings {
 
 function canUseLocalStorage(): boolean {
   return typeof window !== "undefined" && typeof window.localStorage !== "undefined";
+}
+
+function generateId(): string {
+  if (typeof crypto !== "undefined" && typeof crypto.randomUUID === "function") {
+    return crypto.randomUUID();
+  }
+  return "xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx".replace(/[xy]/g, (c) => {
+    const r = (Math.random() * 16) | 0;
+    return (c === "x" ? r : (r & 0x3) | 0x8).toString(16);
+  });
+}
+
+function normalizeWorkspace(raw: unknown): Workspace | null {
+  if (!isRecord(raw)) return null;
+  if (typeof raw.id !== "string" || raw.id.length === 0) return null;
+
+  return {
+    id: raw.id,
+    name: sanitizeRequiredText(raw.name, "Untitled workspace"),
+    description: typeof raw.description === "string" ? raw.description : "",
+    createdAt: typeof raw.createdAt === "string" ? raw.createdAt : new Date().toISOString(),
+    settings: normalizeWorkspaceSettings(raw.settings),
+  };
+}
+
+export function loadWorkspaces(): Workspace[] {
+  if (!canUseLocalStorage()) return [];
+
+  try {
+    const raw = window.localStorage.getItem(WORKSPACES_STORAGE_KEY);
+    if (!raw) return migrateFromLegacy();
+
+    const parsed = JSON.parse(raw);
+    if (!Array.isArray(parsed)) return migrateFromLegacy();
+
+    const workspaces: Workspace[] = [];
+    for (const item of parsed) {
+      const ws = normalizeWorkspace(item);
+      if (ws) workspaces.push(ws);
+    }
+    return workspaces;
+  } catch {
+    return [];
+  }
+}
+
+function migrateFromLegacy(): Workspace[] {
+  if (!canUseLocalStorage()) return [];
+
+  try {
+    const legacyRaw = window.localStorage.getItem(WORKSPACE_SETTINGS_STORAGE_KEY);
+    if (!legacyRaw) return [];
+
+    const legacySettings = normalizeWorkspaceSettings(JSON.parse(legacyRaw));
+    const migrated: Workspace = {
+      id: generateId(),
+      name: legacySettings.workspaceName,
+      description: "",
+      createdAt: new Date().toISOString(),
+      settings: legacySettings,
+    };
+
+    saveWorkspaces([migrated]);
+    return [migrated];
+  } catch {
+    return [];
+  }
+}
+
+export function saveWorkspaces(workspaces: Workspace[]): void {
+  if (!canUseLocalStorage()) return;
+
+  try {
+    window.localStorage.setItem(WORKSPACES_STORAGE_KEY, JSON.stringify(workspaces));
+  } catch {
+    // storage full or unavailable
+  }
+}
+
+export function createWorkspace(name: string, description = ""): Workspace {
+  const ws: Workspace = {
+    id: generateId(),
+    name: name.trim() || "Untitled workspace",
+    description: description.trim(),
+    createdAt: new Date().toISOString(),
+    settings: { ...defaultWorkspaceSettings, workspaceName: name.trim() || "Untitled workspace" },
+  };
+
+  const all = loadWorkspaces();
+  all.push(ws);
+  saveWorkspaces(all);
+  return ws;
+}
+
+export function deleteWorkspace(id: string): void {
+  const all = loadWorkspaces().filter((ws) => ws.id !== id);
+  saveWorkspaces(all);
+}
+
+export function loadLastWorkspaceId(): string | null {
+  if (!canUseLocalStorage()) return null;
+  return window.localStorage.getItem(LAST_WORKSPACE_KEY);
+}
+
+export function saveLastWorkspaceId(id: string | null): void {
+  if (!canUseLocalStorage()) return;
+
+  try {
+    if (id) {
+      window.localStorage.setItem(LAST_WORKSPACE_KEY, id);
+    } else {
+      window.localStorage.removeItem(LAST_WORKSPACE_KEY);
+    }
+  } catch {
+    // storage full or unavailable
+  }
 }
 
 export function loadWorkspaceSettings(): WorkspaceSettings {

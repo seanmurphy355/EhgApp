@@ -20,7 +20,11 @@ import {
 } from "@chakra-ui/react";
 import { X } from "lucide-react";
 import type { ReviewPosture, WorkspaceSettings } from "../lib/settings";
-import { fieldStyles, secondaryButtonStyles } from "./workspaceStyles";
+import {
+  fieldStyles,
+  primaryButtonStyles,
+  secondaryButtonStyles,
+} from "./workspaceStyles";
 
 type SettingsSurfaceProps = {
   settings: WorkspaceSettings;
@@ -217,12 +221,8 @@ export function SettingsSurface({ settings, onSave }: SettingsSurfaceProps) {
 
         <Flex gap="3" wrap="wrap" w={{ base: "full", md: "auto" }}>
           <Button
-            bg="ui.accent"
-            color="white"
-            borderRadius="control"
-            px="5"
+            {...primaryButtonStyles}
             flex={{ base: "1", md: "0" }}
-            _hover={{ bg: "ui.accentHover" }}
             onClick={handleOpen}
           >
             Edit settings
@@ -523,11 +523,7 @@ export function SettingsSurface({ settings, onSave }: SettingsSurfaceProps) {
                   Cancel
                 </Button>
                 <Button
-                  bg="ui.accent"
-                  color="white"
-                  borderRadius="control"
-                  px="5"
-                  _hover={{ bg: "ui.accentHover" }}
+                  {...primaryButtonStyles}
                   onClick={handleSave}
                   disabled={!isValid || !isDirty}
                 >

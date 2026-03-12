@@ -18,12 +18,16 @@ from .schemas import (
     ActivityItemOut,
     ActivityListResponse,
     ActivitySummaryResponse,
+    AgentPaidRequest,
+    AgentPaidResponse,
+    AgentWalletInfo,
     CreateLocalSessionResponse,
     HealthOut,
     RunTaskRequest,
     RunTaskResponse,
     UserOut,
 )
+from .x402_client import get_agent_wallet_address, load_x402_config, paid_get, paid_post
 
 
 def _to_activity_item(activity: ActivityEvent) -> ActivityItemOut:
@@ -174,6 +178,30 @@ def create_app() -> FastAPI:
             eventsToday=int(events_today or 0),
             lastEventAt=last_event_at,
         )
+
+    @app.get("/api/agent/wallet", response_model=AgentWalletInfo)
+    def agent_wallet_info(_user: User = Depends(get_current_user)) -> AgentWalletInfo:
+        config = load_x402_config()
+        address = get_agent_wallet_address(config)
+        return AgentWalletInfo(address=address, configured=config is not None)
+
+    @app.post("/api/agent/paid-request", response_model=AgentPaidResponse)
+    async def agent_paid_request(
+        payload: AgentPaidRequest,
+        _user: User = Depends(get_current_user),
+    ) -> AgentPaidResponse:
+        config = load_x402_config()
+        if config is None:
+            return AgentPaidResponse(status=503, data={"error": "Agent wallet not configured. Set EVM_PRIVATE_KEY."})
+
+        try:
+            if payload.method == "GET":
+                data = await paid_get(payload.url, config)
+            else:
+                data = await paid_post(payload.url, json_body=payload.body, config=config)
+            return AgentPaidResponse(status=200, data=data)
+        except Exception as exc:
+            return AgentPaidResponse(status=502, data={"error": str(exc)})
 
     return app
 

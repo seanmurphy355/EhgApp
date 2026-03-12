@@ -143,3 +143,12 @@ export function toUserMessage(error: unknown): string {
 
   return "Backend request failed.";
 }
+
+export type AgentWalletInfo = {
+  address: string | null;
+  configured: boolean;
+};
+
+export async function fetchAgentWallet(): Promise<AgentWalletInfo> {
+  return request<AgentWalletInfo>("/api/agent/wallet");
+}

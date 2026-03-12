@@ -16,18 +16,32 @@ import {
 } from "@chakra-ui/react";
 import {
   Activity as ActivityIcon,
+  Check,
+  ChevronDown,
   FileText,
   FolderGit2,
   Home as HomeIcon,
+  LayoutDashboard,
   ListTodo,
+  LogOut,
   PanelLeftClose,
   PanelLeftOpen,
+  Plus,
   Settings as SettingsIcon,
+  Wallet as WalletIcon,
 } from "lucide-react";
 import { AsciiArtAnimation } from "./components/AsciiArtAnimation";
 import { AureliaLanding } from "./components/AureliaLanding";
+import { CreateWorkspaceDialog } from "./components/CreateWorkspaceDialog";
+import { DashboardSurface } from "./components/DashboardSurface";
 import { SettingsSurface } from "./components/SettingsSurface";
-import { fieldStyles, secondaryButtonStyles } from "./components/workspaceStyles";
+import { WalletSurface } from "./components/WalletSurface";
+import { WorkspaceSelector } from "./components/WorkspaceSelector";
+import {
+  fieldStyles,
+  primaryButtonStyles,
+  secondaryButtonStyles,
+} from "./components/workspaceStyles";
 import { Tooltip } from "./components/ui/tooltip";
 import {
   ensureSession,
@@ -39,14 +53,25 @@ import {
   type ActivityItem,
   type ActivitySummaryResponse,
 } from "./lib/api";
-import { loadWorkspaceSettings, saveWorkspaceSettings, type WorkspaceSettings } from "./lib/settings";
+import {
+  createWorkspace,
+  loadLastWorkspaceId,
+  loadWorkspaces,
+  saveLastWorkspaceId,
+  saveWorkspaces,
+  type Workspace,
+  type WorkspaceSettings,
+} from "./lib/settings";
+import { WalletProvider } from "./lib/wallet";
 
 const workspaceSections = [
   { label: "Home", icon: HomeIcon },
+  { label: "Dashboard", icon: LayoutDashboard },
   { label: "Tasks", icon: ListTodo },
   { label: "Activity", icon: ActivityIcon },
   { label: "Repos", icon: FolderGit2 },
   { label: "Prompts", icon: FileText },
+  { label: "Wallet", icon: WalletIcon },
   { label: "Settings", icon: SettingsIcon },
 ] as const;
 
@@ -158,6 +183,10 @@ function toSummaryCards(summary: ActivitySummaryResponse): SummaryCardEntry[] {
 }
 
 const workspaceDescriptions: Record<string, { title: string; detail: string }> = {
+  Dashboard: {
+    title: "Research dashboard",
+    detail: "Monitor agent status, task pipelines, budgets, and pending approvals across active research operations.",
+  },
   Tasks: {
     title: "Task operations",
     detail: "Run scoped research work, keep prompts reviewable, and monitor active investigations from a calmer operating surface.",
@@ -318,12 +347,8 @@ function WorkspaceSurface({
             Open repo
           </Button>
           <Button
-            bg="ui.accent"
-            color="white"
-            borderRadius="control"
-            px="5"
+            {...primaryButtonStyles}
             flex={{ base: "1", md: "0" }}
-            _hover={{ bg: "ui.accentHover" }}
             onClick={onRunTask}
             disabled={!canRunTask || isBackendSyncing || isRunningTask}
           >
@@ -447,12 +472,8 @@ function WorkspaceSurface({
                   Keep prompts scoped, concrete, and reviewable so the workspace stays useful once the activity rail starts filling up.
                 </Text>
                 <Button
-                  bg="ui.accent"
-                  color="white"
-                  borderRadius="control"
-                  px="5"
+                  {...primaryButtonStyles}
                   minW={{ md: "140px" }}
-                  _hover={{ bg: "ui.accentHover" }}
                   onClick={onRunTask}
                   disabled={!canRunTask || isBackendSyncing || isRunningTask}
                 >
@@ -557,7 +578,52 @@ function WorkspaceSurface({
   );
 }
 
+
+function resolveInitialWorkspace(): { list: Workspace[]; activeId: string } {
+  let list = loadWorkspaces();
+  if (list.length === 0) {
+    const ws = createWorkspace("Aurelia Research Hub");
+    list = loadWorkspaces();
+    saveLastWorkspaceId(ws.id);
+    return { list, activeId: ws.id };
+  }
+  const lastId = loadLastWorkspaceId();
+  if (list.length === 1) return { list, activeId: list[0]!.id };
+  if (lastId && list.some((ws) => ws.id === lastId)) return { list, activeId: lastId };
+  return { list, activeId: list[0]!.id };
+}
+
 export default function App() {
+  const [{ list: initList, activeId: initActiveId }] = useState(resolveInitialWorkspace);
+  const [workspaceList, setWorkspaceList] = useState<Workspace[]>(initList);
+  const [activeWorkspaceId, setActiveWorkspaceId] = useState<string | null>(initActiveId);
+  const [switcherOpen, setSwitcherOpen] = useState(false);
+
+  useEffect(() => {
+    if (workspaceList.length === 0) {
+      const ws = createWorkspace("Aurelia Research Hub");
+      const updated = loadWorkspaces();
+      setWorkspaceList(updated);
+      setActiveWorkspaceId(ws.id);
+      saveLastWorkspaceId(ws.id);
+    } else if (!activeWorkspaceId) {
+      setActiveWorkspaceId(workspaceList[0]!.id);
+    }
+  }, [workspaceList, activeWorkspaceId]);
+
+  const activeWorkspace = useMemo(
+    () => workspaceList.find((ws) => ws.id === activeWorkspaceId) ?? null,
+    [workspaceList, activeWorkspaceId],
+  );
+
+  const workspaceSettings = activeWorkspace?.settings ?? {
+    workspaceName: "Aurelia Research Hub",
+    defaultRepository: "ehg/agent-research-lab",
+    defaultBriefTemplate: "",
+    reviewPosture: "standard" as const,
+    showActivityRail: true,
+  };
+
   const [activeSection, setActiveSection] = useState("Home");
   const [repoName, setRepoName] = useState("ehg/agent-research-lab");
   const [sidebarOpen, setSidebarOpen] = useState(true);
@@ -569,7 +635,25 @@ export default function App() {
   const [backendError, setBackendError] = useState<string | null>(null);
   const [isBackendSyncing, setIsBackendSyncing] = useState(false);
   const [isRunningTask, setIsRunningTask] = useState(false);
-  const [workspaceSettings, setWorkspaceSettings] = useState<WorkspaceSettings>(() => loadWorkspaceSettings());
+  const [createWsDialogOpen, setCreateWsDialogOpen] = useState(false);
+
+  function handleSelectWorkspace(id: string) {
+    setActiveWorkspaceId(id);
+    saveLastWorkspaceId(id);
+    setActiveSection("Home");
+  }
+
+  function handleCreateWorkspace(name: string, description: string) {
+    const ws = createWorkspace(name, description);
+    setWorkspaceList(loadWorkspaces());
+    handleSelectWorkspace(ws.id);
+  }
+
+  function handleBackToSelector() {
+    setActiveWorkspaceId(null);
+    saveLastWorkspaceId(null);
+    setSwitcherOpen(false);
+  }
 
   const syncBackendData = useCallback(async () => {
     setIsBackendSyncing(true);
@@ -624,9 +708,48 @@ export default function App() {
   }, [prompt, repoName]);
 
   const handleSaveSettings = useCallback((nextSettings: WorkspaceSettings) => {
-    const persistedSettings = saveWorkspaceSettings(nextSettings);
-    setWorkspaceSettings(persistedSettings);
-  }, []);
+    if (!activeWorkspaceId) return;
+    setWorkspaceList((prev) => {
+      const updated = prev.map((ws) =>
+        ws.id === activeWorkspaceId
+          ? { ...ws, name: nextSettings.workspaceName, settings: nextSettings }
+          : ws,
+      );
+      saveWorkspaces(updated);
+      return updated;
+    });
+  }, [activeWorkspaceId]);
+
+  if (!activeWorkspace) {
+    const showLanding = workspaceList.length === 0;
+
+    return (
+        <Box minH="100vh" bg="ui.bg" color="ui.text" position="relative" overflowX="clip">
+          <Box pointerEvents="none" position="fixed" inset="0" zIndex="0">
+            <AsciiArtAnimation />
+          </Box>
+          <Box position="relative" zIndex="1">
+            {showLanding ? (
+              <Box px={{ base: "4", md: "6", xl: "8" }} py={{ base: "4", md: "6" }} maxW="1200px" mx="auto">
+                <AureliaLanding secondaryButtonStyles={secondaryButtonStyles} onGetStarted={() => setCreateWsDialogOpen(true)} />
+                <CreateWorkspaceDialog
+                  open={createWsDialogOpen}
+                  onOpenChange={setCreateWsDialogOpen}
+                  onSubmit={handleCreateWorkspace}
+                  title="Create your first workspace"
+                />
+              </Box>
+            ) : (
+              <WorkspaceSelector
+                workspaces={workspaceList}
+                onSelect={handleSelectWorkspace}
+                onCreate={handleCreateWorkspace}
+              />
+            )}
+          </Box>
+        </Box>
+    );
+  }
 
   return (
     <Box minH="100vh" bg="ui.bg" color="ui.text" position="relative" overflowX="clip">
@@ -667,27 +790,140 @@ export default function App() {
                 gap={{ base: "3", lg: sidebarOpen ? "3" : "4" }}
                 w="full"
               >
-                <HStack gap="3" align="center" minW="0" justify={{ base: "flex-start", lg: sidebarOpen ? "flex-start" : "center" }}>
-                  <img
-                    src="/logo.png"
-                    alt="Aurelia"
-                    draggable={false}
-                    style={{
-                      height: "2.5rem",
-                      width: "2.5rem",
-                      borderRadius: "16px",
-                      flexShrink: 0,
-                    }}
-                  />
-                  <Stack gap="0" minW="0" display={{ base: "flex", lg: sidebarOpen ? "flex" : "none" }}>
-                    <Text fontSize="sm" fontWeight="600" color="ui.text" truncate>
-                      Aurelia
-                    </Text>
-                    <Text fontSize="xs" color="ui.textMuted" truncate>
-                      Research operating system
-                    </Text>
-                  </Stack>
-                </HStack>
+                <Box position="relative" minW="0" flex="1">
+                  <Flex
+                    align="center"
+                    gap="3"
+                    cursor="pointer"
+                    onClick={() => setSwitcherOpen((p) => !p)}
+                    px="2"
+                    py="1.5"
+                    borderRadius="control"
+                    _hover={{ bg: "ui.surfaceHover" }}
+                    justify={{ base: "flex-start", lg: sidebarOpen ? "flex-start" : "center" }}
+                  >
+                    <Flex
+                      h="9"
+                      w="9"
+                      align="center"
+                      justify="center"
+                      borderRadius="12px"
+                      bg="ui.accent"
+                      color="white"
+                      fontSize="sm"
+                      fontWeight="700"
+                      flexShrink={0}
+                    >
+                      {activeWorkspace.name.charAt(0).toUpperCase()}
+                    </Flex>
+                    <Stack gap="0" minW="0" display={{ base: "flex", lg: sidebarOpen ? "flex" : "none" }}>
+                      <Text fontSize="sm" fontWeight="600" color="ui.text" truncate>
+                        {activeWorkspace.name}
+                      </Text>
+                      <Text fontSize="xs" color="ui.textMuted" truncate>
+                        Workspace
+                      </Text>
+                    </Stack>
+                    <Box display={{ base: "block", lg: sidebarOpen ? "block" : "none" }} ml="auto" flexShrink={0}>
+                      <ChevronDown size={14} color="var(--chakra-colors-ui-text-subtle)" />
+                    </Box>
+                  </Flex>
+
+                  {switcherOpen && (
+                    <>
+                      <Box position="fixed" inset="0" zIndex="9" onClick={() => setSwitcherOpen(false)} />
+                      <Box
+                        position="absolute"
+                        top="100%"
+                        left="0"
+                        mt="1"
+                        zIndex="10"
+                        w="240px"
+                        bg="ui.surface"
+                        border="1px solid"
+                        borderColor="ui.borderStrong"
+                        borderRadius="control"
+                        boxShadow="panel"
+                        py="1.5"
+                      >
+                        <Text px="3" py="1.5" fontSize="xs" textTransform="uppercase" letterSpacing="0.16em" color="ui.textSubtle" fontFamily="mono">
+                          Workspaces
+                        </Text>
+                        {workspaceList.map((ws) => (
+                          <Flex
+                            key={ws.id}
+                            align="center"
+                            gap="2.5"
+                            px="3"
+                            py="2"
+                            cursor="pointer"
+                            _hover={{ bg: "ui.surfaceHover" }}
+                            onClick={() => {
+                              handleSelectWorkspace(ws.id);
+                              setSwitcherOpen(false);
+                            }}
+                          >
+                            <Flex
+                              h="7"
+                              w="7"
+                              align="center"
+                              justify="center"
+                              borderRadius="8px"
+                              bg={ws.id === activeWorkspaceId ? "ui.accent" : "ui.surfaceInset"}
+                              color={ws.id === activeWorkspaceId ? "white" : "ui.textMuted"}
+                              fontSize="xs"
+                              fontWeight="700"
+                              flexShrink={0}
+                            >
+                              {ws.name.charAt(0).toUpperCase()}
+                            </Flex>
+                            <Text fontSize="sm" color="ui.text" flex="1" truncate>
+                              {ws.name}
+                            </Text>
+                            {ws.id === activeWorkspaceId && (
+                              <Check size={14} color="var(--chakra-colors-ui-accent)" />
+                            )}
+                          </Flex>
+                        ))}
+                        <Separator my="1.5" borderColor="ui.border" />
+                        <Flex
+                          align="center"
+                          gap="2.5"
+                          px="3"
+                          py="2"
+                          cursor="pointer"
+                          _hover={{ bg: "ui.surfaceHover" }}
+                          onClick={() => {
+                            setSwitcherOpen(false);
+                            handleBackToSelector();
+                          }}
+                        >
+                          <Plus size={14} color="var(--chakra-colors-ui-text-subtle)" />
+                          <Text fontSize="sm" color="ui.textMuted">
+                            New workspace
+                          </Text>
+                        </Flex>
+                        <Flex
+                          align="center"
+                          gap="2.5"
+                          px="3"
+                          py="2"
+                          cursor="pointer"
+                          _hover={{ bg: "ui.surfaceHover" }}
+                          onClick={() => {
+                            setSwitcherOpen(false);
+                            handleBackToSelector();
+                          }}
+                        >
+                          <LogOut size={14} color="var(--chakra-colors-ui-text-subtle)" />
+                          <Text fontSize="sm" color="ui.textMuted">
+                            All workspaces
+                          </Text>
+                        </Flex>
+                      </Box>
+                    </>
+                  )}
+                </Box>
 
                 <Tooltip content={sidebarOpen ? "Collapse sidebar" : "Expand sidebar"}>
                   <IconButton
@@ -707,7 +943,7 @@ export default function App() {
               </Flex>
 
               <Stack gap="5" w="full" display={{ base: "flex", lg: sidebarOpen ? "flex" : "none" }}>
-                <Button bg="ui.accent" color="white" borderRadius="control" h="11" _hover={{ bg: "ui.accentHover" }}>
+                <Button {...primaryButtonStyles} h="11">
                   New task
                 </Button>
 
@@ -793,7 +1029,11 @@ export default function App() {
         <Box as="main" minW="0">
           <Stack gap={{ base: "6", xl: "8" }} px={{ base: "4", md: "6", xl: "8" }} py={{ base: "4", md: "6" }} maxW="1200px" mx="auto">
             {activeSection === "Home" ? (
-              <AureliaLanding secondaryButtonStyles={secondaryButtonStyles} />
+              <AureliaLanding secondaryButtonStyles={secondaryButtonStyles} onGetStarted={() => setCreateWsDialogOpen(true)} />
+            ) : activeSection === "Dashboard" ? (
+              <DashboardSurface />
+            ) : activeSection === "Wallet" ? (
+              <WalletProvider><WalletSurface /></WalletProvider>
             ) : activeSection === "Settings" ? (
               <SettingsSurface settings={workspaceSettings} onSave={handleSaveSettings} />
             ) : (
@@ -816,6 +1056,12 @@ export default function App() {
           </Stack>
         </Box>
       </Grid>
+
+      <CreateWorkspaceDialog
+        open={createWsDialogOpen}
+        onOpenChange={setCreateWsDialogOpen}
+        onSubmit={handleCreateWorkspace}
+      />
     </Box>
   );
 }

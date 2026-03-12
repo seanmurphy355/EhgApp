@@ -53,3 +53,19 @@ class ActivitySummaryResponse(BaseModel):
     tasksToday: int
     eventsToday: int
     lastEventAt: datetime | None
+
+
+class AgentPaidRequest(BaseModel):
+    url: str = Field(min_length=1, max_length=2000)
+    method: Literal["GET", "POST"] = "GET"
+    body: dict[str, Any] | list[Any] | None = None
+
+
+class AgentPaidResponse(BaseModel):
+    status: int
+    data: Any
+
+
+class AgentWalletInfo(BaseModel):
+    address: str | None
+    configured: bool

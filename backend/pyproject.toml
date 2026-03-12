@@ -5,12 +5,14 @@ description = "Aurelia local-first backend service"
 requires-python = ">=3.12"
 dependencies = [
   "alembic>=1.14.0",
+  "eth-account>=0.13.7",
   "fastapi>=0.115.0",
   "pgembed>=0.1.9",
   "psycopg[binary]>=3.2.0",
   "python-dotenv>=1.0.1",
   "sqlalchemy>=2.0.36",
   "uvicorn[standard]>=0.32.0",
+  "x402[httpx]>=2.3.0",
 ]
 
 [build-system]
