@@ -10,7 +10,7 @@ import {
   Stack,
   Text,
 } from "@chakra-ui/react";
-import { Clock } from "lucide-react";
+import { Clock, RefreshCw } from "lucide-react";
 import { secondaryButtonStyles } from "./workspaceStyles";
 
 type AgentStatus = "active" | "idle" | "paused" | "error";
@@ -170,13 +170,13 @@ const SEED_APPROVALS: ApprovalItem[] = [
 ];
 
 const SUMMARY_ITEMS = [
-  { label: "Active agents", value: "3 / 5", tone: "ui.success" },
-  { label: "Running tasks", value: "3", tone: "ui.accent" },
-  { label: "Budget", value: "$1,240 / $4,000", tone: "ui.warning" },
-  { label: "Pending reviews", value: "4", tone: "ui.violet" },
+  { label: "Active agents", value: "3 / 5", tone: "ui.success", hint: "3 agents running, 2 idle or paused." },
+  { label: "Running tasks", value: "3", tone: "ui.accent", hint: "Tasks currently in progress." },
+  { label: "Budget spent", value: "$1,240 / $4,000", tone: "ui.warning", hint: "31% of total budget consumed.", progress: 31 },
+  { label: "Pending reviews", value: "4", tone: "ui.violet", hint: "Awaiting human approval." },
 ] as const;
 
-const blockCard = {
+const primaryCard = {
   bg: "ui.cardAlpha",
   border: "1px solid",
   borderColor: "ui.border",
@@ -185,30 +185,63 @@ const blockCard = {
   overflow: "hidden",
 } as const;
 
-function BlockHeader({ title, trailing }: { title: string; trailing?: React.ReactNode }) {
+const sidebarCard = {
+  bg: "ui.cardAltAlpha",
+  border: "1px solid",
+  borderColor: "ui.border",
+  borderRadius: "panel",
+  shadow: "hairline",
+  overflow: "hidden",
+} as const;
+
+function SectionCardHeader({
+  sectionLabel,
+  title,
+  trailing,
+}: {
+  sectionLabel: string;
+  title: string;
+  trailing?: React.ReactNode;
+}) {
   return (
-    <Flex
-      justify="space-between"
-      align="baseline"
-      px="5"
-      py="3.5"
+    <Card.Header
+      px={{ base: "5", md: "6" }}
+      py="4"
       borderBottom="1px solid"
       borderColor="ui.border"
     >
-      <Text fontSize="sm" fontWeight="600" color="ui.text">{title}</Text>
-      {trailing}
-    </Flex>
+      <Flex justify="space-between" align="start">
+        <Stack gap="1">
+          <Text
+            fontSize="xs"
+            textTransform="uppercase"
+            letterSpacing="0.18em"
+            color="ui.textSubtle"
+            fontFamily="mono"
+          >
+            {sectionLabel}
+          </Text>
+          <Heading as="h2" fontSize="lg" letterSpacing="-0.03em">
+            {title}
+          </Heading>
+        </Stack>
+        {trailing}
+      </Flex>
+    </Card.Header>
   );
 }
 
 function AgentRow({ agent }: { agent: AgentEntry }) {
   const cfg = STATUS_CONFIG[agent.status];
   const dimmed = agent.status === "idle" || agent.status === "paused";
+  const budgetPct = agent.budgetTotal > 0
+    ? Math.round((agent.budgetUsed / agent.budgetTotal) * 100)
+    : 0;
 
   return (
-    <Flex align="center" gap="3" py="2.5" px="5">
+    <Flex align="center" gap="3" py="3" px={{ base: "5", md: "6" }}>
       <Box h="2" w="2" borderRadius="full" bg={cfg.tone} flexShrink={0} />
-      <Stack gap="0.5" flex="1" minW="0">
+      <Stack gap="1" flex="1" minW="0">
         <Flex align="center" gap="2">
           <Text fontSize="sm" fontWeight="500" color={dimmed ? "ui.textSubtle" : "ui.text"} truncate>
             {agent.name}
@@ -220,148 +253,383 @@ function AgentRow({ agent }: { agent: AgentEntry }) {
         <Text fontSize="xs" color={dimmed ? "ui.textSubtle" : "ui.textMuted"} truncate>
           {agent.currentTask ?? "No active task"}
         </Text>
+        {agent.budgetTotal > 0 && (
+          <Flex align="center" gap="2" mt="0.5">
+            <Box
+              h="3px"
+              flex="1"
+              borderRadius="full"
+              bg="ui.surfaceRaised"
+              overflow="hidden"
+            >
+              <Box
+                h="full"
+                borderRadius="full"
+                bg={budgetPct > 75 ? "ui.warning" : "ui.accent"}
+                w={`${budgetPct}%`}
+                transition="width 0.3s ease"
+              />
+            </Box>
+            <Text fontSize="xs" fontFamily="mono" color="ui.textSubtle" flexShrink={0}>
+              ${agent.budgetUsed} / ${agent.budgetTotal}
+            </Text>
+          </Flex>
+        )}
       </Stack>
-      <Text fontSize="xs" fontFamily="mono" color={agent.progress > 0 ? "ui.textMuted" : "ui.textSubtle"} flexShrink={0}>
-        {agent.progress > 0 ? `${agent.progress}%` : "\u2014"}
-      </Text>
-      <HStack gap="1" flexShrink={0}>
-        <Clock size={10} color="var(--chakra-colors-ui-text-subtle)" />
-        <Text fontSize="xs" color="ui.textSubtle">{agent.lastHeartbeat}</Text>
-      </HStack>
+      <Stack gap="0" align="end" flexShrink={0}>
+        <Text fontSize="xs" fontFamily="mono" color={agent.progress > 0 ? "ui.textMuted" : "ui.textSubtle"}>
+          {agent.progress > 0 ? `${agent.progress}%` : "\u2014"}
+        </Text>
+        <HStack gap="1">
+          <Clock size={10} color="var(--ui-text-subtle)" />
+          <Text fontSize="xs" color="ui.textSubtle">{agent.lastHeartbeat}</Text>
+        </HStack>
+      </Stack>
     </Flex>
   );
 }
 
 function PipelineTaskRow({ task }: { task: PipelineTask }) {
   return (
-    <Flex align="center" gap="3" py="2" pl="9" pr="5">
+    <Flex align="center" gap="3" py="2" pl="8" pr="5">
       <Text fontSize="sm" color="ui.text" flex="1" truncate>{task.title}</Text>
-      <Text fontSize="xs" color="ui.textSubtle" flexShrink={0} truncate>
+      <Text fontSize="xs" color="ui.textSubtle" flexShrink={0} truncate maxW="120px">
         {task.agent}
       </Text>
       <HStack gap="1" flexShrink={0}>
-        <Clock size={10} color="var(--chakra-colors-ui-text-subtle)" />
+        <Clock size={10} color="var(--ui-text-subtle)" />
         <Text fontSize="xs" fontFamily="mono" color="ui.textSubtle">{task.timeInStage}</Text>
       </HStack>
     </Flex>
   );
 }
 
-export function DashboardSurface() {
+function StatCard({
+  label,
+  value,
+  tone,
+  hint,
+  progress,
+}: {
+  label: string;
+  value: string;
+  tone: string;
+  hint: string;
+  progress?: number;
+}) {
   return (
-    <Stack gap="6">
-      <Stack gap="1">
-        <Heading as="h1" fontSize={{ base: "2xl", md: "3xl" }} letterSpacing="-0.04em" lineHeight="1.05">
-          Research dashboard
-        </Heading>
-        <Text fontSize="sm" lineHeight="1.8" color="ui.textMuted">
-          Monitor agent status, task pipelines, budgets, and pending approvals.
+    <Box
+      bg="ui.surfaceInset"
+      border="1px solid"
+      borderColor="ui.border"
+      borderRadius="16px"
+      px="4"
+      py="4"
+      flex="1"
+      minW="0"
+    >
+      <Stack gap="1.5">
+        <Text
+          fontSize="xs"
+          textTransform="uppercase"
+          letterSpacing="0.16em"
+          color="ui.textSubtle"
+          fontFamily="mono"
+        >
+          {label}
+        </Text>
+        <Text fontSize="lg" fontWeight="700" letterSpacing="-0.03em" color={tone}>
+          {value}
+        </Text>
+        {progress !== undefined && (
+          <Box h="3px" borderRadius="full" bg="ui.surfaceRaised" overflow="hidden">
+            <Box
+              h="full"
+              borderRadius="full"
+              bg={tone}
+              w={`${progress}%`}
+              transition="width 0.3s ease"
+            />
+          </Box>
+        )}
+        <Text fontSize="xs" color="ui.textMuted" lineHeight="1.7">
+          {hint}
         </Text>
       </Stack>
+    </Box>
+  );
+}
 
-      <HStack gap="6" flexWrap="wrap">
-        {SUMMARY_ITEMS.map((item, i) => (
-          <HStack key={item.label} gap="2">
-            {i > 0 && <Box h="3" w="px" bg="ui.border" mr="1" />}
-            <Box h="1.5" w="1.5" borderRadius="full" bg={item.tone} />
-            <Text fontSize="xs" color="ui.textSubtle">{item.label}</Text>
-            <Text fontSize="xs" fontWeight="600" fontFamily="mono" color="ui.text">{item.value}</Text>
-          </HStack>
-        ))}
-      </HStack>
+export function DashboardSurface() {
+  const activeCount = SEED_AGENTS.filter((a) => a.status === "active").length;
 
-      <Grid templateColumns={{ base: "1fr", xl: "repeat(2, minmax(0, 1fr))" }} gap="4">
-        <Card.Root {...blockCard}>
-          <BlockHeader title="Agents" />
-          <Card.Body p="0">
-            {SEED_AGENTS.map((agent, i) => (
-              <Box key={agent.id}>
-                <AgentRow agent={agent} />
-                {i < SEED_AGENTS.length - 1 && <Separator borderColor="ui.border" mx="5" />}
-              </Box>
-            ))}
-          </Card.Body>
-        </Card.Root>
+  return (
+    <Stack gap={{ base: "6", xl: "8" }}>
+      {/* ── Page header ── */}
+      <Flex
+        direction={{ base: "column", xl: "row" }}
+        align={{ base: "start", xl: "center" }}
+        justify="space-between"
+        gap="5"
+        pb="5"
+        borderBottom="1px solid"
+        borderColor="ui.border"
+      >
+        <Stack gap="3" minW="0">
+          <Flex gap="2" wrap="wrap">
+            <HStack
+              gap="2"
+              px="3"
+              py="1.5"
+              border="1px solid"
+              borderColor="ui.border"
+              borderRadius="full"
+              bg="ui.pillAlpha"
+              w="fit-content"
+            >
+              <Text
+                fontSize="xs"
+                textTransform="uppercase"
+                letterSpacing="0.16em"
+                color="ui.textSubtle"
+                fontFamily="mono"
+              >
+                Dashboard
+              </Text>
+            </HStack>
+            <HStack
+              gap="2"
+              px="3"
+              py="1.5"
+              border="1px solid"
+              borderColor="ui.accentBorder"
+              borderRadius="full"
+              bg="ui.accentMuted"
+              w="fit-content"
+            >
+              <Box h="2" w="2" borderRadius="full" bg="ui.accentSoft" />
+              <Text fontSize="sm" color="ui.text">Research Lab</Text>
+            </HStack>
+            <HStack
+              gap="2"
+              px="3"
+              py="1.5"
+              border="1px solid"
+              borderColor="ui.border"
+              borderRadius="full"
+              bg="ui.pillAlpha"
+              w="fit-content"
+            >
+              <Box h="2" w="2" borderRadius="full" bg="ui.success" />
+              <Text fontSize="sm" color="ui.textMuted">
+                {activeCount} active
+              </Text>
+            </HStack>
+          </Flex>
 
-        <Card.Root {...blockCard}>
-          <BlockHeader title="Pipeline" />
-          <Card.Body p="0">
-            {SEED_PIPELINE.map((stage, si) => (
-              <Box key={stage.label}>
-                <Flex align="center" gap="2" py="2.5" px="5" mt={si > 0 ? "1" : "0"}>
-                  <Box h="2" w="2" borderRadius="full" bg={stage.tone} />
-                  <Text fontSize="xs" fontWeight="600" color="ui.textMuted">{stage.label}</Text>
-                  <Text fontSize="xs" fontFamily="mono" color="ui.textSubtle">{stage.tasks.length}</Text>
-                </Flex>
-                {stage.tasks.map((task, ti) => (
-                  <Box key={task.id}>
-                    <PipelineTaskRow task={task} />
-                    {ti < stage.tasks.length - 1 && <Separator borderColor="ui.border" ml="9" mr="5" />}
-                  </Box>
-                ))}
-              </Box>
-            ))}
-          </Card.Body>
-        </Card.Root>
+          <Stack gap="1" minW="0">
+            <Heading
+              as="h1"
+              fontSize={{ base: "2xl", md: "3xl" }}
+              letterSpacing="-0.04em"
+              lineHeight="1.05"
+            >
+              Research dashboard
+            </Heading>
+            <Text
+              fontSize={{ base: "sm", md: "md" }}
+              lineHeight="1.8"
+              color="ui.textMuted"
+              maxW="4xl"
+            >
+              Monitor agent status, task pipelines, budgets, and pending approvals.
+            </Text>
+          </Stack>
+        </Stack>
 
-        <Card.Root {...blockCard}>
-          <BlockHeader title="Recent activity" />
-          <Card.Body p="0">
-            {SEED_FEED.map((entry, i) => (
-              <Box key={entry.id}>
-                <Flex align="center" gap="3" py="2.5" px="5">
-                  <Box h="1.5" w="1.5" borderRadius="full" bg={entry.tone} flexShrink={0} />
-                  <Text fontSize="sm" fontWeight="500" color="ui.text" flexShrink={0}>
-                    {entry.title}
-                  </Text>
-                  <Text fontSize="sm" color="ui.textSubtle" flex="1" truncate>
-                    {entry.detail}
-                  </Text>
-                </Flex>
-                {i < SEED_FEED.length - 1 && <Separator borderColor="ui.border" mx="5" />}
-              </Box>
-            ))}
-          </Card.Body>
-        </Card.Root>
+        <Flex gap="3" wrap="wrap" w={{ base: "full", md: "auto" }}>
+          <Button size="sm" {...secondaryButtonStyles}>
+            <RefreshCw size={14} />
+            <Text ml="1.5">Refresh</Text>
+          </Button>
+        </Flex>
+      </Flex>
 
-        <Card.Root {...blockCard}>
-          <BlockHeader
-            title="Pending approvals"
-            trailing={
-              <Text fontSize="xs" fontFamily="mono" color="ui.accent">{SEED_APPROVALS.length} pending</Text>
-            }
+      {/* ── Summary stat cards ── */}
+      <Grid
+        templateColumns={{ base: "repeat(2, 1fr)", md: "repeat(4, 1fr)" }}
+        gap="3"
+      >
+        {SUMMARY_ITEMS.map((item) => (
+          <StatCard
+            key={item.label}
+            label={item.label}
+            value={item.value}
+            tone={item.tone}
+            hint={item.hint}
+            progress={"progress" in item ? item.progress : undefined}
           />
-          <Card.Body p="0">
-            {SEED_APPROVALS.map((item, i) => (
-              <Box key={item.id}>
-                <Flex align="center" gap="3" py="2.5" px="5">
-                  <Box h="1.5" w="1.5" borderRadius="full" bg="ui.violet" flexShrink={0} />
-                  <Stack gap="0.5" flex="1" minW="0">
-                    <Text fontSize="sm" fontWeight="500" color="ui.text" truncate>
-                      {item.title}
-                    </Text>
-                    <Flex gap="2" align="center">
-                      <Text fontSize="xs" color="ui.textSubtle">{item.agent}</Text>
-                      <HStack gap="1">
-                        <Clock size={10} color="var(--chakra-colors-ui-text-subtle)" />
-                        <Text fontSize="xs" color="ui.textSubtle">{item.submittedAgo}</Text>
-                      </HStack>
+        ))}
+      </Grid>
+
+      {/* ── Main + sidebar grid ── */}
+      <Grid
+        templateColumns={{ base: "1fr", xl: "minmax(0, 1fr) 340px" }}
+        gap="5"
+        alignItems="start"
+      >
+        {/* Left column */}
+        <Stack gap="5">
+          {/* Agents card */}
+          <Card.Root {...primaryCard}>
+            <SectionCardHeader sectionLabel="Fleet" title="Agents" />
+            <Card.Body p="0">
+              {SEED_AGENTS.map((agent, i) => (
+                <Box key={agent.id}>
+                  <AgentRow agent={agent} />
+                  {i < SEED_AGENTS.length - 1 && (
+                    <Separator borderColor="ui.border" mx={{ base: "5", md: "6" }} />
+                  )}
+                </Box>
+              ))}
+            </Card.Body>
+          </Card.Root>
+
+          {/* Recent activity card */}
+          <Card.Root {...primaryCard}>
+            <SectionCardHeader sectionLabel="Feed" title="Recent activity" />
+            <Card.Body p="0">
+              {SEED_FEED.map((entry, i) => (
+                <Box key={entry.id}>
+                  <Flex align="start" gap="3" py="3" px={{ base: "5", md: "6" }}>
+                    <Box
+                      h="2"
+                      w="2"
+                      borderRadius="full"
+                      bg={entry.tone}
+                      flexShrink={0}
+                      mt="1.5"
+                    />
+                    <Stack gap="0.5" flex="1" minW="0">
+                      <Text fontSize="sm" fontWeight="500" color="ui.text">
+                        {entry.title}
+                      </Text>
+                      <Text fontSize="xs" color="ui.textMuted" lineHeight="1.7">
+                        {entry.detail}
+                      </Text>
+                    </Stack>
+                  </Flex>
+                  {i < SEED_FEED.length - 1 && (
+                    <Separator borderColor="ui.border" mx={{ base: "5", md: "6" }} />
+                  )}
+                </Box>
+              ))}
+            </Card.Body>
+          </Card.Root>
+        </Stack>
+
+        {/* Right sidebar */}
+        <Stack
+          gap="5"
+          position={{ xl: "sticky" }}
+          top={{ xl: "6" }}
+          alignSelf="start"
+        >
+          {/* Pending approvals card */}
+          <Card.Root {...sidebarCard}>
+            <SectionCardHeader
+              sectionLabel="Review"
+              title="Pending approvals"
+              trailing={
+                <Text fontSize="xs" fontFamily="mono" color="ui.accent" mt="1">
+                  {SEED_APPROVALS.length} pending
+                </Text>
+              }
+            />
+            <Card.Body p="0">
+              {SEED_APPROVALS.map((item, i) => (
+                <Box key={item.id}>
+                  <Stack gap="2" py="3" px="5">
+                    <Flex align="start" gap="2.5">
+                      <Box
+                        h="2"
+                        w="2"
+                        borderRadius="full"
+                        bg="ui.violet"
+                        flexShrink={0}
+                        mt="1.5"
+                      />
+                      <Stack gap="0.5" flex="1" minW="0">
+                        <Text fontSize="sm" fontWeight="500" color="ui.text" lineHeight="1.4">
+                          {item.title}
+                        </Text>
+                        <Flex gap="2" align="center" flexWrap="wrap">
+                          <Text fontSize="xs" color="ui.textSubtle">{item.agent}</Text>
+                          <HStack gap="1">
+                            <Clock size={10} color="var(--ui-text-subtle)" />
+                            <Text fontSize="xs" color="ui.textSubtle">{item.submittedAgo}</Text>
+                          </HStack>
+                        </Flex>
+                      </Stack>
+                    </Flex>
+                    <Flex gap="2" pl="4.5">
+                      <Button
+                        size="xs"
+                        variant="ghost"
+                        color="ui.accent"
+                        px="2"
+                        borderRadius="control"
+                        _hover={{ bg: "ui.surfaceHover" }}
+                      >
+                        Approve
+                      </Button>
+                      <Button size="xs" {...secondaryButtonStyles} px="2">
+                        Reject
+                      </Button>
                     </Flex>
                   </Stack>
-                  <HStack gap="1.5" flexShrink={0}>
-                    <Button size="xs" variant="ghost" color="ui.accent" px="2" borderRadius="control" _hover={{ bg: "ui.surfaceHover" }}>
-                      Approve
-                    </Button>
-                    <Button size="xs" {...secondaryButtonStyles} px="2">
-                      Reject
-                    </Button>
-                  </HStack>
-                </Flex>
-                {i < SEED_APPROVALS.length - 1 && <Separator borderColor="ui.border" mx="5" />}
-              </Box>
-            ))}
-          </Card.Body>
-        </Card.Root>
+                  {i < SEED_APPROVALS.length - 1 && (
+                    <Separator borderColor="ui.border" mx="5" />
+                  )}
+                </Box>
+              ))}
+            </Card.Body>
+          </Card.Root>
+
+          {/* Pipeline card */}
+          <Card.Root {...sidebarCard}>
+            <SectionCardHeader sectionLabel="Workflow" title="Pipeline" />
+            <Card.Body p="0">
+              {SEED_PIPELINE.map((stage, si) => (
+                <Box key={stage.label}>
+                  <Flex
+                    align="center"
+                    gap="2"
+                    py="2.5"
+                    px="5"
+                    mt={si > 0 ? "1" : "0"}
+                  >
+                    <Box h="2" w="2" borderRadius="full" bg={stage.tone} />
+                    <Text fontSize="xs" fontWeight="600" color="ui.textMuted">
+                      {stage.label}
+                    </Text>
+                    <Text fontSize="xs" fontFamily="mono" color="ui.textSubtle">
+                      {stage.tasks.length}
+                    </Text>
+                  </Flex>
+                  {stage.tasks.map((task, ti) => (
+                    <Box key={task.id}>
+                      <PipelineTaskRow task={task} />
+                      {ti < stage.tasks.length - 1 && (
+                        <Separator borderColor="ui.border" ml="8" mr="5" />
+                      )}
+                    </Box>
+                  ))}
+                </Box>
+              ))}
+            </Card.Body>
+          </Card.Root>
+        </Stack>
       </Grid>
     </Stack>
   );
