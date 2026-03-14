@@ -16,6 +16,7 @@ import {
 } from "@chakra-ui/react";
 import {
   Activity as ActivityIcon,
+  Bot,
   Check,
   ChevronDown,
   FileText,
@@ -33,8 +34,10 @@ import {
 import { AsciiArtAnimation } from "./components/AsciiArtAnimation";
 import { AureliaLanding } from "./components/AureliaLanding";
 import { CreateWorkspaceDialog } from "./components/CreateWorkspaceDialog";
+import { AgentsSurface } from "./components/AgentsSurface";
 import { DashboardSurface } from "./components/DashboardSurface";
 import { SettingsSurface } from "./components/SettingsSurface";
+import { TasksSurface } from "./components/TasksSurface";
 import { WalletSurface } from "./components/WalletSurface";
 import { WorkspaceSelector } from "./components/WorkspaceSelector";
 import {
@@ -43,6 +46,7 @@ import {
   secondaryButtonStyles,
 } from "./components/workspaceStyles";
 import { Tooltip } from "./components/ui/tooltip";
+import { Toaster } from "./components/ui/toaster";
 import {
   ensureSession,
   fetchActivity,
@@ -67,6 +71,7 @@ import { WalletProvider } from "./lib/wallet";
 const workspaceSections = [
   { label: "Home", icon: HomeIcon },
   { label: "Dashboard", icon: LayoutDashboard },
+  { label: "Agents", icon: Bot },
   { label: "Tasks", icon: ListTodo },
   { label: "Activity", icon: ActivityIcon },
   { label: "Repos", icon: FolderGit2 },
@@ -284,62 +289,13 @@ function WorkspaceSurface({
         borderBottom="1px solid"
         borderColor="ui.border"
       >
-        <Stack gap="3" minW="0">
-          <Flex gap="2" wrap="wrap">
-            <HStack
-              gap="2"
-              px="3"
-              py="1.5"
-              border="1px solid"
-              borderColor="ui.border"
-              borderRadius="full"
-              bg="ui.pillAlpha"
-              w="fit-content"
-            >
-              <Text fontSize="xs" textTransform="uppercase" letterSpacing="0.16em" color="ui.textSubtle" fontFamily="mono">
-                {activeSection}
-              </Text>
-            </HStack>
-            <HStack
-              gap="2"
-              px="3"
-              py="1.5"
-              border="1px solid"
-              borderColor="ui.accentBorder"
-              borderRadius="full"
-              bg="ui.accentMuted"
-              w="fit-content"
-            >
-              <Box h="2" w="2" borderRadius="full" bg="ui.accentSoft" />
-              <Text fontSize="sm" color="ui.text">
-                {repoName}
-              </Text>
-            </HStack>
-            <HStack
-              gap="2"
-              px="3"
-              py="1.5"
-              border="1px solid"
-              borderColor="ui.border"
-              borderRadius="full"
-              bg="ui.pillAlpha"
-              w="fit-content"
-            >
-              <Box h="2" w="2" borderRadius="full" bg={connectionTone} />
-              <Text fontSize="sm" color="ui.textMuted">
-                {connectionLabel}
-              </Text>
-            </HStack>
-          </Flex>
-
-          <Stack gap="1" minW="0">
-            <Heading as="h1" fontSize={{ base: "2xl", md: "3xl" }} letterSpacing="-0.04em" lineHeight="1.05">
-              {sectionContent.title}
-            </Heading>
-            <Text fontSize={{ base: "sm", md: "md" }} lineHeight="1.8" color="ui.textMuted" maxW="4xl">
-              {sectionContent.detail}
-            </Text>
-          </Stack>
+        <Stack gap="1" minW="0">
+          <Heading as="h1" fontSize={{ base: "2xl", md: "3xl" }} letterSpacing="-0.04em" lineHeight="1.05">
+            {sectionContent.title}
+          </Heading>
+          <Text fontSize={{ base: "sm", md: "md" }} lineHeight="1.8" color="ui.textMuted" maxW="4xl">
+            {sectionContent.detail}
+          </Text>
         </Stack>
 
         <Flex gap="3" wrap="wrap" w={{ base: "full", md: "auto" }}>
@@ -1032,10 +988,27 @@ export default function App() {
               <AureliaLanding secondaryButtonStyles={secondaryButtonStyles} onGetStarted={() => setCreateWsDialogOpen(true)} />
             ) : activeSection === "Dashboard" ? (
               <DashboardSurface />
+            ) : activeSection === "Agents" ? (
+              <AgentsSurface />
             ) : activeSection === "Wallet" ? (
               <WalletProvider><WalletSurface /></WalletProvider>
             ) : activeSection === "Settings" ? (
               <SettingsSurface settings={workspaceSettings} onSave={handleSaveSettings} />
+            ) : activeSection === "Tasks" ? (
+              <TasksSurface
+                repoName={repoName}
+                prompt={prompt}
+                activityFeed={activityFeed}
+                summaryCards={summaryCards}
+                isBackendSyncing={isBackendSyncing}
+                isRunningTask={isRunningTask}
+                backendError={backendError}
+                canRunTask={canRunTask}
+                onRepoNameChange={setRepoName}
+                onPromptChange={setPrompt}
+                onRunTask={handleRunTask}
+                onRetryBackend={syncBackendData}
+              />
             ) : (
               <WorkspaceSurface
                 activeSection={activeSection}
@@ -1062,6 +1035,7 @@ export default function App() {
         onOpenChange={setCreateWsDialogOpen}
         onSubmit={handleCreateWorkspace}
       />
+      <Toaster />
     </Box>
   );
 }

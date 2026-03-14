@@ -1,6 +1,6 @@
-export type ActivityType = "task.run_requested" | "session.created" | "system.info";
+type ActivityType = "task.run_requested" | "session.created" | "system.info";
 
-export type User = {
+type User = {
   id: string;
   name: string;
   email: string;
@@ -14,7 +14,7 @@ export type ActivityItem = {
   createdAt: string;
 };
 
-export type ActivityListResponse = {
+type ActivityListResponse = {
   items: ActivityItem[];
 };
 
@@ -24,16 +24,16 @@ export type ActivitySummaryResponse = {
   lastEventAt: string | null;
 };
 
-export type RunTaskRequest = {
+type RunTaskRequest = {
   repo: string;
   prompt: string;
 };
 
-export type RunTaskResponse = {
+type RunTaskResponse = {
   activity: ActivityItem;
 };
 
-export type LocalSessionResponse = {
+type LocalSessionResponse = {
   token: string;
   user: User;
 };
@@ -81,19 +81,19 @@ export function getApiBaseUrl(): string {
   return API_BASE_URL;
 }
 
-export function clearSessionToken(): void {
+function clearSessionToken(): void {
   sessionToken = null;
   localStorage.removeItem(TOKEN_STORAGE_KEY);
 }
 
-export async function createLocalSession(): Promise<LocalSessionResponse> {
+async function createLocalSession(): Promise<LocalSessionResponse> {
   const payload = await request<LocalSessionResponse>("/api/sessions/local", { method: "POST", body: "{}" }, false);
   sessionToken = payload.token;
   localStorage.setItem(TOKEN_STORAGE_KEY, payload.token);
   return payload;
 }
 
-export async function getCurrentUser(): Promise<User> {
+async function getCurrentUser(): Promise<User> {
   return request<User>("/api/users/me");
 }
 
@@ -123,10 +123,6 @@ export async function runTask(payload: RunTaskRequest): Promise<RunTaskResponse>
     method: "POST",
     body: JSON.stringify(payload),
   });
-}
-
-export async function fetchHealth(): Promise<{ status: string; dbMode: string; version: string }> {
-  return request<{ status: string; dbMode: string; version: string }>("/api/health", {}, false);
 }
 
 export function toUserMessage(error: unknown): string {

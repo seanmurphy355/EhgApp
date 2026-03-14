@@ -221,7 +221,7 @@ function WalletCard() {
                     color="ui.textSubtle"
                     _hover={{ color: "ui.text" }}
                   >
-                    <RefreshCw size={12} className={isRefreshingBalance ? "animate-spin" : ""} />
+                    <RefreshCw size={12} />
                   </Button>
                 </HStack>
               </Flex>
@@ -612,7 +612,7 @@ function AgentWalletCard() {
                     color="ui.textSubtle"
                     _hover={{ color: "ui.text" }}
                   >
-                    <RefreshCw size={12} className={isRefreshing ? "animate-spin" : ""} />
+                    <RefreshCw size={12} />
                   </Button>
                 </HStack>
               </Flex>

@@ -18,9 +18,9 @@ export type Workspace = {
 
 const WORKSPACES_STORAGE_KEY = "aurelia.workspaces.v1";
 const LAST_WORKSPACE_KEY = "aurelia.last-workspace-id";
-export const WORKSPACE_SETTINGS_STORAGE_KEY = "aurelia.workspace-settings.v1";
+const WORKSPACE_SETTINGS_STORAGE_KEY = "aurelia.workspace-settings.v1";
 
-export const defaultWorkspaceSettings: WorkspaceSettings = {
+const defaultWorkspaceSettings: WorkspaceSettings = {
   workspaceName: "Aurelia Research Hub",
   defaultRepository: "ehg/agent-research-lab",
   defaultBriefTemplate: "Summarize the objective, constraints, evidence requirements, and target deliverable for each research run.",
@@ -169,11 +169,6 @@ export function createWorkspace(name: string, description = ""): Workspace {
   return ws;
 }
 
-export function deleteWorkspace(id: string): void {
-  const all = loadWorkspaces().filter((ws) => ws.id !== id);
-  saveWorkspaces(all);
-}
-
 export function loadLastWorkspaceId(): string | null {
   if (!canUseLocalStorage()) return null;
   return window.localStorage.getItem(LAST_WORKSPACE_KEY);
@@ -191,36 +186,4 @@ export function saveLastWorkspaceId(id: string | null): void {
   } catch {
     // storage full or unavailable
   }
-}
-
-export function loadWorkspaceSettings(): WorkspaceSettings {
-  if (!canUseLocalStorage()) {
-    return defaultWorkspaceSettings;
-  }
-
-  try {
-    const rawValue = window.localStorage.getItem(WORKSPACE_SETTINGS_STORAGE_KEY);
-
-    if (!rawValue) {
-      return defaultWorkspaceSettings;
-    }
-
-    return normalizeWorkspaceSettings(JSON.parse(rawValue));
-  } catch {
-    return defaultWorkspaceSettings;
-  }
-}
-
-export function saveWorkspaceSettings(settings: WorkspaceSettings): WorkspaceSettings {
-  const normalized = normalizeWorkspaceSettings(settings);
-
-  if (canUseLocalStorage()) {
-    try {
-      window.localStorage.setItem(WORKSPACE_SETTINGS_STORAGE_KEY, JSON.stringify(normalized));
-    } catch {
-      return normalized;
-    }
-  }
-
-  return normalized;
 }

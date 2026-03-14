@@ -64,10 +64,6 @@ export function loadPaymentHistory(): PaymentRecord[] {
   }
 }
 
-export function savePaymentHistory(records: PaymentRecord[]): void {
-  localStorage.setItem(PAYMENT_HISTORY_KEY, JSON.stringify(records.slice(0, 100)));
-}
-
 export function loadMaxValue(): bigint {
   try {
     const raw = localStorage.getItem(MAX_VALUE_STORAGE_KEY);
